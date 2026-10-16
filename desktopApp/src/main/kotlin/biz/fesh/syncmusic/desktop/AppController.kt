@@ -71,7 +71,7 @@ class AppController {
         } else {
             null
         }
-        env ?: host ?: "Компьютер"
+        env ?: host ?: "Комп'ютер"
     }
 
     private val server = SyncServer(this)
@@ -113,7 +113,7 @@ class AppController {
                 ServerState.Running(port)
             } catch (t: Throwable) {
                 AppLog.e("Cannot start server on $port", t)
-                ServerState.Failed("Порт $port занят другой программой")
+                ServerState.Failed("Порт $port зайнятий іншою програмою")
             }
         }
     }
@@ -174,7 +174,7 @@ class AppController {
         }
         regeneratePin()
         AppLog.i("Paired device ${request.deviceName} (${request.deviceId})")
-        _events.tryEmit("Телефон «${request.deviceName}» подключён")
+        _events.tryEmit("Телефон «${request.deviceName}» підключено")
         return PairResult.Ok(token)
     }
 

@@ -97,7 +97,7 @@ class SyncServer(private val app: AppController) {
                 val request = call.receive<PairRequest>()
                 when (val result = app.pair(request)) {
                     is PairResult.Ok -> call.respond(PairResponse(result.token, app.settings.value.serverId, app.computerName))
-                    PairResult.WrongPin -> call.respond(HttpStatusCode.Forbidden, ErrorResponse("Неверный код"))
+                    PairResult.WrongPin -> call.respond(HttpStatusCode.Forbidden, ErrorResponse("Невірний код"))
                 }
             }
 
@@ -106,7 +106,7 @@ class SyncServer(private val app: AppController) {
                 val folder = app.settings.value.musicFolder
                 if (folder == null || !java.io.File(folder).isDirectory) {
                     // Never hand out an empty list because of a missing folder: the phone would delete everything.
-                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка с музыкой на компьютере недоступна"))
+                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка з музикою на комп'ютері недоступна"))
                     return@get
                 }
                 call.respond(app.library.manifest(app.settings.value.serverId))
@@ -146,14 +146,14 @@ class SyncServer(private val app: AppController) {
     private fun landingPage(): String {
         val hasApk = ApkResource.available
         val button = if (hasApk) {
-            """<a class="btn" href="/app.apk">Скачать приложение для Android</a>
-               <p class="hint">После загрузки откройте файл и разрешите установку из этого источника.</p>"""
+            """<a class="btn" href="/app.apk">Завантажити застосунок для Android</a>
+               <p class="hint">Після завантаження відкрийте файл і дозвольте встановлення з цього джерела.</p>"""
         } else {
-            """<p class="hint">В эту сборку не вложен APK. Скачайте его со страницы релизов на GitHub.</p>"""
+            """<p class="hint">У цю збірку не вкладено APK. Завантажте його зі сторінки релізів на GitHub.</p>"""
         }
         return """
             <!doctype html>
-            <html lang="ru"><head><meta charset="utf-8">
+            <html lang="uk"><head><meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>Sync Music</title>
             <style>
@@ -165,7 +165,7 @@ class SyncServer(private val app: AppController) {
             </style></head>
             <body><div class="card">
               <h1>Sync Music</h1>
-              <p>Компьютер «${app.computerName}» готов синхронизировать музыку с телефоном.</p>
+              <p>Комп'ютер «${app.computerName}» готовий синхронізувати музику з телефоном.</p>
               $button
             </div></body></html>
         """.trimIndent()

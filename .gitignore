@@ -9,3 +9,5 @@ captures/
 # Bundled at CI time from the Android build
 desktopApp/src/main/resources/syncmusic.apk
 desktopApp/src/main/resources/syncmusic-apk.txt
+# Downloaded release files (local copy only)
+releases/

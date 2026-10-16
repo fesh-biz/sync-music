@@ -115,6 +115,8 @@ data class SyncProgress(
     val deletedThisRun: Int = 0,
     val message: String? = null,
     val freeSpaceBytes: Long = -1,
+    /** Where the phone keeps the music, e.g. "SD-карта". */
+    val storage: String? = null,
     val appVersionCode: Int = 0,
     val timestamp: Long = 0,
 ) {

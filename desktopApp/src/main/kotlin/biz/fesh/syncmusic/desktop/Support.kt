@@ -19,7 +19,7 @@ object AppPaths {
 
     fun defaultMusicFolder(): String? {
         val home = System.getProperty("user.home") ?: return null
-        val candidates = listOf(File(home, "Music"), File(home, "Музыка"))
+        val candidates = listOf(File(home, "Music"), File(home, "Музика"), File(home, "Музыка"))
         return candidates.firstOrNull { it.isDirectory }?.absolutePath
     }
 }

@@ -108,7 +108,7 @@ private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddres
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Синхронизация музыки с телефоном по Wi-Fi",
+                "Синхронізація музики з телефоном через Wi-Fi",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -117,7 +117,7 @@ private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddres
             is ServerState.Running -> {
                 val address = addresses.firstOrNull()?.address
                 StatusPill(
-                    text = if (address != null) "Работает · $address:$port" else "Работает · нет сети",
+                    text = if (address != null) "Працює · $address:$port" else "Працює · немає мережі",
                     color = if (address != null) Palette.Green else Palette.Amber,
                     background = if (address != null) Palette.GreenSoft else Palette.AmberSoft,
                 )
@@ -173,8 +173,8 @@ private fun Muted(text: String, maxLines: Int = Int.MAX_VALUE) {
 @Composable
 private fun LibraryCard(modifier: Modifier, stats: LibraryStats, settings: Settings, controller: AppController) {
     SectionCard(modifier) {
-        CardTitle("Музыка на компьютере")
-        Muted(settings.musicFolder ?: "Папка не выбрана", maxLines = 2)
+        CardTitle("Музика на комп'ютері")
+        Muted(settings.musicFolder ?: "Папку не вибрано", maxLines = 2)
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Text(Format.files(stats.files), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
@@ -185,27 +185,27 @@ private fun LibraryCard(modifier: Modifier, stats: LibraryStats, settings: Setti
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
-                Muted("Сканирование папки…")
+                Muted("Сканування папки…")
             }
         } else if (stats.scannedAt > 0) {
-            Muted("Проверено ${Format.moment(stats.scannedAt)}")
+            Muted("Перевірено ${Format.moment(stats.scannedAt)}")
         }
         stats.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = {
                 chooseFolder(settings.musicFolder)?.let(controller::setMusicFolder)
-            }) { Text("Выбрать папку") }
-            OutlinedButton(onClick = controller::rescan) { Text("Обновить") }
+            }) { Text("Вибрати папку") }
+            OutlinedButton(onClick = controller::rescan) { Text("Оновити") }
         }
-        Muted("Синхронизируются аудиофайлы, плейлисты и тексты песен (.lrc), с сохранением структуры папок.")
+        Muted("Синхронізуються аудіофайли, плейлисти й тексти пісень (.lrc) зі збереженням структури папок.")
     }
 }
 
 private fun chooseFolder(initial: String?): String? {
     val chooser = JFileChooser(initial ?: System.getProperty("user.home")).apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = "Выберите папку с музыкой"
+        dialogTitle = "Виберіть папку з музикою"
         isAcceptAllFileFilterUsed = false
     }
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
@@ -222,7 +222,7 @@ private fun ConnectCard(
     controller: AppController,
 ) {
     SectionCard(modifier) {
-        CardTitle("Подключить телефон")
+        CardTitle("Підключити телефон")
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             val address = addresses.firstOrNull()?.address
             if (address != null && ApkResource.available) {
@@ -231,28 +231,28 @@ private fun ConnectCard(
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Step("1", "Установите приложение")
+                Step("1", "Встановіть застосунок")
                 if (address != null && ApkResource.available) {
-                    Muted("Наведите камеру телефона на QR-код и скачайте приложение. Телефон должен быть в той же Wi-Fi сети.")
+                    Muted("Наведіть камеру телефона на QR-код і завантажте застосунок. Телефон має бути в тій самій Wi-Fi мережі.")
                 } else {
-                    Muted("Скачайте SyncMusic.apk со страницы релизов и установите на телефон.")
+                    Muted("Завантажте SyncMusic.apk зі сторінки релізів і встановіть на телефон.")
                 }
                 Spacer(Modifier.height(6.dp))
-                Step("2", "Введите код в приложении")
-                Muted("Нажмите «Найти компьютер», выберите «${controller.computerName}» и введите код:")
+                Step("2", "Введіть код у застосунку")
+                Muted("Натисніть «Знайти комп'ютер», виберіть «${controller.computerName}» і введіть код:")
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(pin.chunked(3).joinToString(" "), style = PinStyle, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = controller::regeneratePin) { Text("Новый код") }
+                    TextButton(onClick = controller::regeneratePin) { Text("Новий код") }
                 }
             }
         }
         if (addresses.isNotEmpty()) {
             Muted(
-                "Адрес компьютера для ручного ввода: " + addresses.joinToString(", ") { it.address },
+                "Адреса комп'ютера для ручного введення: " + addresses.joinToString(", ") { it.address },
             )
         } else {
-            Text("Компьютер не подключён к сети", color = MaterialTheme.colorScheme.error)
+            Text("Комп'ютер не підключений до мережі", color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -275,13 +275,13 @@ private fun Step(number: String, title: String) {
 
 @Composable
 private fun DevicesSection(settings: Settings, live: Map<String, LiveStatus>, now: Long, controller: AppController) {
-    Text("Телефоны", style = MaterialTheme.typography.titleLarge)
+    Text("Телефони", style = MaterialTheme.typography.titleLarge)
     if (settings.devices.isEmpty()) {
         SectionCard(Modifier.fillMaxWidth()) {
-            Text("Пока ни один телефон не подключён", style = MaterialTheme.typography.titleSmall)
+            Text("Поки що жоден телефон не підключено", style = MaterialTheme.typography.titleSmall)
             Muted(
-                "Установите приложение на телефон и введите код из блока «Подключить телефон». " +
-                    "Если телефон не находит компьютер, нажмите «Разрешить в брандмауэре» ниже.",
+                "Встановіть застосунок на телефон і введіть код із блоку «Підключити телефон». " +
+                    "Якщо телефон не знаходить комп'ютер, натисніть «Дозволити в брандмауері» нижче.",
             )
         }
     } else {
@@ -298,6 +298,7 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
     val lastSeen = maxOf(device.lastSeen, live?.receivedAt ?: 0L)
     val syncing = live != null && live.progress.phase.isActive && now - live.receivedAt < 30_000
     val online = now - lastSeen < 17 * 60_000L
+    val freeLabel = progress?.storage?.let { "Вільно ($it)" } ?: "Вільно на телефоні"
 
     SectionCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -306,16 +307,16 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
                 Muted(statusLine(progress, syncing, lastSeen, now))
             }
             when {
-                syncing -> StatusPill("Синхронизация", Palette.Indigo, Palette.IndigoSoft)
-                progress?.phase == SyncPhase.ERROR && online -> StatusPill("Ошибка", Palette.Red, Palette.RedSoft)
-                online && progress != null && progress.remainingFiles == 0 -> StatusPill("Всё синхронизировано", Palette.Green, Palette.GreenSoft)
-                online -> StatusPill("На связи", Palette.Green, Palette.GreenSoft)
-                else -> StatusPill("Не в сети", Palette.Grey, Palette.GreySoft)
+                syncing -> StatusPill("Синхронізація", Palette.Indigo, Palette.IndigoSoft)
+                progress?.phase == SyncPhase.ERROR && online -> StatusPill("Помилка", Palette.Red, Palette.RedSoft)
+                online && progress != null && progress.remainingFiles == 0 -> StatusPill("Усе синхронізовано", Palette.Green, Palette.GreenSoft)
+                online -> StatusPill("На зв'язку", Palette.Green, Palette.GreenSoft)
+                else -> StatusPill("Не в мережі", Palette.Grey, Palette.GreySoft)
             }
         }
 
         if (progress == null || progress.totalFiles == 0 && progress.phase != SyncPhase.DONE) {
-            Muted("Телефон ещё не синхронизировался. Синхронизация начнётся автоматически в течение нескольких минут.")
+            Muted("Телефон ще не синхронізувався. Синхронізація почнеться автоматично протягом кількох хвилин.")
         } else {
             Spacer(Modifier.height(2.dp))
             LinearProgressIndicator(
@@ -327,26 +328,26 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
             Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
                 Stat(
                     Modifier.weight(1f),
-                    "Синхронизировано",
-                    "${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)}",
-                    "${Format.bytes(progress.syncedBytes)} из ${Format.bytes(progress.totalBytes)} · ${(progress.fraction * 100).toInt()}%",
+                    "Синхронізовано",
+                    "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)}",
+                    "${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)} · ${(progress.fraction * 100).toInt()}%",
                 )
                 Stat(
                     Modifier.weight(1f),
-                    "Осталось",
-                    if (progress.remainingFiles == 0) "Ничего" else Format.files(progress.remainingFiles),
-                    if (progress.remainingFiles == 0) "Телефон в актуальном состоянии" else Format.bytes(progress.remainingBytes) +
+                    "Залишилось",
+                    if (progress.remainingFiles == 0) "Нічого" else Format.files(progress.remainingFiles),
+                    if (progress.remainingFiles == 0) "Телефон в актуальному стані" else Format.bytes(progress.remainingBytes) +
                         (if (syncing) Format.eta(progress.remainingBytes, progress.bytesPerSecond)?.let { " · $it" } ?: "" else ""),
                 )
                 Stat(
                     Modifier.weight(1f),
-                    if (syncing) "Скорость" else "Свободно на телефоне",
+                    if (syncing) "Швидкість" else freeLabel,
                     if (syncing) Format.speed(progress.bytesPerSecond) else if (progress.freeSpaceBytes >= 0) Format.bytes(progress.freeSpaceBytes) else "—",
-                    if (syncing && progress.freeSpaceBytes >= 0) "Свободно: ${Format.bytes(progress.freeSpaceBytes)}" else "",
+                    if (syncing && progress.freeSpaceBytes >= 0) "$freeLabel: ${Format.bytes(progress.freeSpaceBytes)}" else "",
                 )
             }
             if (syncing && progress.currentFile != null) {
-                Muted("Сейчас: ${progress.currentFile}", maxLines = 1)
+                Muted("Зараз: ${progress.currentFile}", maxLines = 1)
             }
             val message = progress.message
             if (message != null && (progress.phase == SyncPhase.ERROR || progress.phase == SyncPhase.STOPPED)) {
@@ -356,24 +357,24 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
 
         HorizontalDivider(Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Muted("Подключён ${Format.moment(device.pairedAt, now)}")
+            Muted("Підключено ${Format.moment(device.pairedAt, now)}")
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { confirmRemove = true }) { Text("Отключить телефон", color = MaterialTheme.colorScheme.error) }
+            TextButton(onClick = { confirmRemove = true }) { Text("Відключити телефон", color = MaterialTheme.colorScheme.error) }
         }
     }
 
     if (confirmRemove) {
         AlertDialog(
             onDismissRequest = { confirmRemove = false },
-            title = { Text("Отключить «${device.name}»?") },
-            text = { Text("Телефон перестанет синхронизироваться с этим компьютером. Музыка на телефоне останется. Подключить снова можно по коду.") },
+            title = { Text("Відключити «${device.name}»?") },
+            text = { Text("Телефон перестане синхронізуватися з цим комп'ютером. Музика на телефоні залишиться. Підключити знову можна за кодом.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRemove = false
                     controller.removeDevice(device.id)
-                }) { Text("Отключить", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Відключити", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Скасувати") } },
         )
     }
 }
@@ -381,17 +382,17 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
 private fun statusLine(progress: SyncProgress?, syncing: Boolean, lastSeen: Long, now: Long): String {
     if (syncing && progress != null) {
         return when (progress.phase) {
-            SyncPhase.CONNECTING -> "Подключается…"
-            SyncPhase.COMPARING -> "Сравнивает файлы…"
-            SyncPhase.DOWNLOADING -> "Загружает музыку · загружено за сеанс: ${Format.files(progress.downloadedThisRun)}"
-            SyncPhase.DELETING -> "Удаляет треки, удалённые на компьютере…"
-            else -> "Синхронизация…"
+            SyncPhase.CONNECTING -> "Підключається…"
+            SyncPhase.COMPARING -> "Порівнює файли…"
+            SyncPhase.DOWNLOADING -> "Завантажує музику · за сеанс: ${Format.files(progress.downloadedThisRun)}"
+            SyncPhase.DELETING -> "Видаляє треки, видалені на комп'ютері…"
+            else -> "Синхронізація…"
         }
     }
-    val seen = "последняя связь ${Format.moment(lastSeen, now)}"
+    val seen = "останній зв'язок ${Format.moment(lastSeen, now)}"
     return when (progress?.phase) {
-        SyncPhase.ERROR -> "Ошибка синхронизации · $seen"
-        SyncPhase.STOPPED -> "Синхронизация прервана, продолжится автоматически · $seen"
+        SyncPhase.ERROR -> "Помилка синхронізації · $seen"
+        SyncPhase.STOPPED -> "Синхронізацію перервано, продовжиться автоматично · $seen"
         else -> seen.replaceFirstChar { it.uppercase() }
     }
 }
@@ -411,33 +412,33 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
 private fun SettingsCard(settings: Settings, controller: AppController) {
     var firewallStatus by remember { mutableStateOf<String?>(null) }
     SectionCard(Modifier.fillMaxWidth()) {
-        CardTitle("Настройки")
+        CardTitle("Налаштування")
         CheckRow(
             checked = settings.autostart,
             enabled = WindowsIntegration.canIntegrate,
-            text = "Запускать вместе с Windows (в трее, без окна)",
+            text = "Запускати разом із Windows (у треї, без вікна)",
             onChange = controller::setAutostart,
         )
         CheckRow(
             checked = settings.closeToTray,
             enabled = true,
-            text = "При закрытии окна продолжать работу в трее",
+            text = "Після закриття вікна працювати далі в треї",
             onChange = controller::setCloseToTray,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(
                 enabled = WindowsIntegration.isWindows,
                 onClick = {
-                    firewallStatus = "Подтвердите запрос Windows…"
+                    firewallStatus = "Підтвердіть запит Windows…"
                     controller.openFirewall { ok ->
-                        firewallStatus = if (ok) "Готово: доступ в брандмауэре открыт" else "Не удалось — запрос отклонён"
+                        firewallStatus = if (ok) "Готово: доступ у брандмауері відкрито" else "Не вдалося — запит відхилено"
                     }
                 },
-            ) { Text("Разрешить в брандмауэре") }
+            ) { Text("Дозволити в брандмауері") }
             OutlinedButton(onClick = { openLog() }) { Text("Журнал") }
             firewallStatus?.let { Muted(it) }
         }
-        Muted("Кнопка «Разрешить в брандмауэре» нужна, если телефон не находит компьютер. Windows попросит права администратора.")
+        Muted("Кнопка «Дозволити в брандмауері» потрібна, якщо телефон не знаходить комп'ютер. Windows попросить права адміністратора.")
     }
 }
 

@@ -40,6 +40,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +88,7 @@ import biz.fesh.syncmusic.shared.SyncPhase
 import biz.fesh.syncmusic.shared.SyncProgress
 import biz.fesh.syncmusic.sync.EngineState
 import biz.fesh.syncmusic.sync.Storage
+import biz.fesh.syncmusic.sync.StorageOption
 import biz.fesh.syncmusic.sync.SyncEngine
 import biz.fesh.syncmusic.sync.SyncWorker
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +111,20 @@ private data class Perms(val storage: Boolean, val notifications: Boolean, val b
     }
 }
 
+/** Runs [block] every time the screen comes back to the foreground. */
+@Composable
+private fun OnResume(block: () -> Unit) {
+    val owner = LocalLifecycleOwner.current
+    val current by rememberUpdatedState(block)
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) current()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+}
+
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
@@ -117,26 +134,33 @@ fun MainScreen() {
     val lastSync by config.lastSync.collectAsState()
     val autoSync by config.autoSync.collectAsState()
     val deleteRemoved by config.deleteRemoved.collectAsState()
+    val storageId by config.storageId.collectAsState()
     var perms by remember { mutableStateOf(Perms.read(context)) }
+    var storages by remember { mutableStateOf(Storage.options(context)) }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) perms = Perms.read(context)
+    OnResume {
+        perms = Perms.read(context)
+        storages = Storage.options(context)
+    }
+    // Notice an SD card being inserted or removed while the screen is open.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            storages = withContext(Dispatchers.IO) { Storage.options(context) }
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         perms = Perms.read(context)
     }
 
-    // Opening the app (or granting storage access) kicks off a sync right away.
+    // Opening the app (or granting storage access) starts a sync right away.
     val current = server
     LaunchedEffect(perms.storage, current?.serverId, current?.revoked) {
         if (perms.storage && current != null && !current.revoked) SyncWorker.syncNow(context)
     }
+
+    val selectedStorage = storages.firstOrNull { it.id == storageId }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         LazyColumn(
@@ -149,10 +173,10 @@ fun MainScreen() {
             if (!perms.storage) {
                 item {
                     NoticeCard(
-                        title = "Разрешите доступ к памяти",
-                        text = "Музыка сохраняется в папку Music/${Storage.FOLDER_NAME}, где её видят все плееры. " +
-                            "Для этого Android требует разрешение «Доступ ко всем файлам».",
-                        button = "Разрешить",
+                        title = "Дозвольте доступ до пам'яті",
+                        text = "Музика зберігається в папку Music/${Storage.FOLDER_NAME} у пам'яті телефона або на SD-карті, де її бачать усі плеєри. " +
+                            "Для цього Android вимагає дозвіл «Доступ до всіх файлів».",
+                        button = "Дозволити",
                     ) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             openStorageSettings(context)
@@ -165,18 +189,18 @@ fun MainScreen() {
             if (!perms.battery) {
                 item {
                     NoticeCard(
-                        title = "Разрешите работу в фоне",
-                        text = "Без этого Android может не запускать синхронизацию, пока приложение закрыто.",
-                        button = "Разрешить",
+                        title = "Дозвольте роботу у фоні",
+                        text = "Без цього Android може не запускати синхронізацію, поки застосунок закритий.",
+                        button = "Дозволити",
                     ) { openBatterySettings(context) }
                 }
             }
             if (!perms.notifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 item {
                     NoticeCard(
-                        title = "Уведомления",
-                        text = "Чтобы видеть ход загрузки и итог синхронизации.",
-                        button = "Включить",
+                        title = "Сповіщення",
+                        text = "Щоб бачити перебіг завантаження і підсумок синхронізації.",
+                        button = "Увімкнути",
                     ) { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                 }
             }
@@ -188,7 +212,16 @@ fun MainScreen() {
                     if (current.apkVersionCode > BuildConfig.VERSION_CODE) {
                         item { UpdateCard(current) }
                     }
-                    item { StatusCard(current, engine, lastSync, perms.storage) }
+                    item { StatusCard(current, engine, lastSync, perms.storage, selectedStorage) }
+                    item {
+                        StorageCard(
+                            config = config,
+                            server = current,
+                            options = storages,
+                            selectedId = storageId,
+                            running = engine.running,
+                        )
+                    }
                     item {
                         SettingsCard(
                             autoSync = autoSync,
@@ -253,7 +286,7 @@ private fun Header() {
     Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
         Text("Sync Music", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(
-            "Музыка с компьютера на телефоне — по Wi-Fi",
+            "Музика з комп'ютера на телефоні — через Wi-Fi",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -320,7 +353,7 @@ private fun PairingCard(config: Config) {
             error = null
             val network = WifiNet.find(context)
             if (network == null) {
-                error = "Подключитесь к той же Wi-Fi сети, что и компьютер."
+                error = "Підключіться до тієї самої Wi-Fi мережі, що й комп'ютер."
             } else {
                 found = Discovery.discover(context, network, 3_000)
                 if (found.size == 1) selected = found.first()
@@ -343,7 +376,7 @@ private fun PairingCard(config: Config) {
                 val info = withContext(Dispatchers.IO) { Api(Http.client(network), host, port).info() }
                 selected = FoundServer(host, info)
             } catch (e: Throwable) {
-                error = "Не удалось подключиться к $host. Проверьте адрес и что Sync Music запущен на компьютере."
+                error = "Не вдалося підключитися до $host. Перевірте адресу і що Sync Music запущено на комп'ютері."
             } finally {
                 busy = false
             }
@@ -372,10 +405,10 @@ private fun PairingCard(config: Config) {
                 if (config.autoSync.value) SyncWorker.schedulePeriodic(context)
                 SyncWorker.syncNow(context)
             } catch (e: PairingException) {
-                error = (e.message ?: "Неверный код") + ". Проверьте код на экране компьютера."
+                error = (e.message ?: "Невірний код") + ". Перевірте код на екрані комп'ютера."
                 pin = ""
             } catch (e: Throwable) {
-                error = "Не удалось подключиться: ${e.message}"
+                error = "Не вдалося підключитися: ${e.message}"
             } finally {
                 busy = false
             }
@@ -387,14 +420,14 @@ private fun PairingCard(config: Config) {
     SectionCard {
         val target = selected
         if (target == null) {
-            Text("Подключение к компьютеру", style = MaterialTheme.typography.titleMedium)
-            Muted("Запустите Sync Music на компьютере. Телефон и компьютер должны быть в одной Wi-Fi сети.")
+            Text("Підключення до комп'ютера", style = MaterialTheme.typography.titleMedium)
+            Muted("Запустіть Sync Music на комп'ютері. Телефон і комп'ютер мають бути в одній Wi-Fi мережі.")
 
             if (searching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Muted("Ищем компьютер…")
+                    Muted("Шукаємо комп'ютер…")
                 }
             }
             found.forEach { server ->
@@ -417,19 +450,22 @@ private fun PairingCard(config: Config) {
                         Text(server.info.serverName, style = MaterialTheme.typography.titleSmall)
                         Muted(server.host)
                     }
-                    Text("Выбрать", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    Text("Вибрати", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
             }
             if (searched && !searching && found.isEmpty() && error == null) {
-                Muted("Компьютер не найден. Проверьте, что Sync Music открыт на ПК, и нажмите «Искать снова». Если не помогло — в программе на ПК нажмите «Разрешить в брандмауэре».")
+                Muted(
+                    "Комп'ютер не знайдено. Перевірте, що Sync Music відкрито на ПК, і натисніть «Шукати знову». " +
+                        "Якщо не допомогло — у програмі на ПК натисніть «Дозволити в брандмауері».",
+                )
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             Button(onClick = { search() }, enabled = !searching) {
-                Text(if (searched) "Искать снова" else "Найти компьютер")
+                Text(if (searched) "Шукати знову" else "Знайти комп'ютер")
             }
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            Muted("Или введите адрес, показанный в программе на компьютере:")
+            Muted("Або введіть адресу, показану в програмі на комп'ютері:")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = manualHost,
@@ -443,8 +479,8 @@ private fun PairingCard(config: Config) {
                 OutlinedButton(onClick = { checkManual() }, enabled = !busy && manualHost.isNotBlank()) { Text("ОК") }
             }
         } else {
-            Text("Компьютер «${target.info.serverName}»", style = MaterialTheme.typography.titleMedium)
-            Muted("Введите 6-значный код из окна Sync Music на компьютере.")
+            Text("Комп'ютер «${target.info.serverName}»", style = MaterialTheme.typography.titleMedium)
+            Muted("Введіть 6-значний код із вікна Sync Music на комп'ютері.")
             OutlinedTextField(
                 value = pin,
                 onValueChange = { value -> pin = value.filter(Char::isDigit).take(6) },
@@ -465,7 +501,7 @@ private fun PairingCard(config: Config) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                 }
-                Button(onClick = { pair(target) }, enabled = pin.length == 6 && !busy) { Text("Подключить") }
+                Button(onClick = { pair(target) }, enabled = pin.length == 6 && !busy) { Text("Підключити") }
             }
         }
     }
@@ -479,9 +515,9 @@ private fun Dot(color: Color) {
 @Composable
 private fun RevokedCard(server: PairedServer, config: Config) {
     SectionCard {
-        Text("Компьютер «${server.serverName}» отключил этот телефон", style = MaterialTheme.typography.titleMedium)
-        Muted("Музыка на телефоне осталась. Чтобы снова синхронизироваться, подключитесь по коду.")
-        Button(onClick = { config.setServer(null) }) { Text("Подключиться заново") }
+        Text("Комп'ютер «${server.serverName}» відключив цей телефон", style = MaterialTheme.typography.titleMedium)
+        Muted("Музика на телефоні залишилася. Щоб знову синхронізуватися, підключіться за кодом.")
+        Button(onClick = { config.setServer(null) }) { Text("Підключитися знову") }
     }
 }
 
@@ -489,9 +525,9 @@ private fun RevokedCard(server: PairedServer, config: Config) {
 private fun UpdateCard(server: PairedServer) {
     val context = LocalContext.current
     NoticeCard(
-        title = "Доступна новая версия",
-        text = "На компьютере установлена более новая версия Sync Music. Обновите приложение на телефоне.",
-        button = "Скачать обновление",
+        title = "Доступна нова версія",
+        text = "На комп'ютері встановлено новішу версію Sync Music. Оновіть застосунок на телефоні.",
+        button = "Завантажити оновлення",
     ) {
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://${server.host}:${server.port}/app.apk")))
@@ -515,7 +551,13 @@ private fun LastSync.toProgress() = SyncProgress(
 )
 
 @Composable
-private fun StatusCard(server: PairedServer, engine: EngineState, lastSync: LastSync?, hasStorage: Boolean) {
+private fun StatusCard(
+    server: PairedServer,
+    engine: EngineState,
+    lastSync: LastSync?,
+    hasStorage: Boolean,
+    storage: StorageOption?,
+) {
     val context = LocalContext.current
     val now by produceState(System.currentTimeMillis()) {
         while (true) {
@@ -551,20 +593,20 @@ private fun StatusCard(server: PairedServer, engine: EngineState, lastSync: Last
             Row(Modifier.fillMaxWidth()) {
                 Stat(
                     Modifier.weight(1f),
-                    "Синхронизировано",
-                    "${Format.number(progress.syncedFiles.toLong())} из ${Format.number(progress.totalFiles.toLong())}",
-                    "${Format.bytes(progress.syncedBytes)} из ${Format.bytes(progress.totalBytes)}",
+                    "Синхронізовано",
+                    "${Format.number(progress.syncedFiles.toLong())} з ${Format.number(progress.totalFiles.toLong())}",
+                    "${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)}",
                 )
                 Stat(
                     Modifier.weight(1f),
-                    "Осталось",
+                    "Залишилось",
                     if (progress.remainingFiles == 0) "0" else Format.files(progress.remainingFiles),
-                    if (progress.remainingFiles == 0) "всё на месте" else Format.bytes(progress.remainingBytes),
+                    if (progress.remainingFiles == 0) "усе на місці" else Format.bytes(progress.remainingBytes),
                 )
             }
             if (running && progress.phase == SyncPhase.DOWNLOADING) {
                 val file = progress.currentFile?.substringAfterLast('/')
-                if (file != null) Muted("Загружается: $file", maxLines = 1)
+                if (file != null) Muted("Завантажується: $file", maxLines = 1)
                 val eta = Format.eta(progress.remainingBytes, progress.bytesPerSecond)
                 if (progress.bytesPerSecond > 0) Muted(Format.speed(progress.bytesPerSecond) + (eta?.let { " · $it" } ?: ""))
             }
@@ -576,31 +618,33 @@ private fun StatusCard(server: PairedServer, engine: EngineState, lastSync: Last
 
         Button(
             onClick = { SyncWorker.syncNow(context) },
-            enabled = !running && hasStorage,
+            enabled = !running && hasStorage && storage != null,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (running) "Идёт синхронизация…" else "Синхронизировать сейчас")
+            Text(if (running) "Триває синхронізація…" else "Синхронізувати зараз")
         }
-        Muted("Папка на телефоне: Music/${Storage.FOLDER_NAME}")
+        if (storage != null) {
+            Muted("Музика зберігається: ${storage.label} → ${storage.displayPath}")
+        }
     }
 }
 
 private fun statusText(running: Boolean, progress: SyncProgress?, lastSync: LastSync?, now: Long): String {
     if (running) {
         return when (progress?.phase) {
-            null, SyncPhase.CONNECTING -> "Подключение к компьютеру…"
-            SyncPhase.COMPARING -> "Сравнение файлов…"
-            SyncPhase.DOWNLOADING -> "Загрузка музыки…"
-            SyncPhase.DELETING -> "Удаление треков, удалённых на ПК…"
-            else -> "Синхронизация…"
+            null, SyncPhase.CONNECTING -> "Підключення до комп'ютера…"
+            SyncPhase.COMPARING -> "Порівняння файлів…"
+            SyncPhase.DOWNLOADING -> "Завантаження музики…"
+            SyncPhase.DELETING -> "Видалення треків, видалених на ПК…"
+            else -> "Синхронізація…"
         }
     }
-    if (lastSync == null) return "Ещё не синхронизировалось"
+    if (lastSync == null) return "Ще не синхронізувалося"
     val moment = Format.moment(lastSync.at, now)
     return when (lastSync.phase) {
-        SyncPhase.DONE -> if (lastSync.syncedFiles >= lastSync.totalFiles) "Всё синхронизировано · $moment" else "Синхронизировано · $moment"
-        SyncPhase.STOPPED -> "Прервано $moment · продолжится автоматически"
-        SyncPhase.ERROR -> (lastSync.message ?: "Ошибка") + " · $moment"
+        SyncPhase.DONE -> if (lastSync.syncedFiles >= lastSync.totalFiles) "Усе синхронізовано · $moment" else "Синхронізовано · $moment"
+        SyncPhase.STOPPED -> "Перервано $moment · продовжиться автоматично"
+        SyncPhase.ERROR -> (lastSync.message ?: "Помилка") + " · $moment"
         else -> moment
     }
 }
@@ -611,6 +655,118 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         Muted(sub, maxLines = 1)
+    }
+}
+
+// ------------------------------------------------------------------ storage
+
+@Composable
+private fun StorageCard(
+    config: Config,
+    server: PairedServer,
+    options: List<StorageOption>,
+    selectedId: String,
+    running: Boolean,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var pending by remember { mutableStateOf<StorageOption?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val selected = options.firstOrNull { it.id == selectedId }
+
+    SectionCard {
+        Text("Де зберігати музику", style = MaterialTheme.typography.titleMedium)
+        options.forEach { option ->
+            val isSelected = option.id == selectedId
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(enabled = !running && !busy && !isSelected) { pending = option }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = isSelected,
+                    onClick = { if (!isSelected) pending = option },
+                    enabled = !running && !busy,
+                )
+                Spacer(Modifier.width(6.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                    val space = if (option.freeBytes >= 0 && option.totalBytes > 0) {
+                        "вільно ${Format.bytes(option.freeBytes)} з ${Format.bytes(option.totalBytes)}"
+                    } else {
+                        ""
+                    }
+                    Muted(listOf(option.displayPath, space).filter { it.isNotEmpty() }.joinToString(" · "), maxLines = 2)
+                }
+            }
+        }
+        if (selected == null) {
+            Text(
+                "Вибрану SD-карту не знайдено. Вставте її або виберіть іншу пам'ять — до того синхронізація не працюватиме.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (options.size == 1) {
+            Muted("SD-карту не виявлено. Коли вставите картку, вона з'явиться тут.")
+        }
+        if (selected?.appPrivate == true) {
+            Muted("На цій версії Android музика на SD-карті лежить у папці застосунку і видалиться, якщо видалити застосунок.")
+        }
+        if (running) {
+            Muted("Змінити пам'ять можна після завершення синхронізації.")
+        }
+        if (busy) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Muted("Видаляємо музику зі старого місця…")
+            }
+        }
+    }
+
+    val target = pending
+    if (target != null) {
+        fun apply(deleteOld: Boolean) {
+            pending = null
+            busy = true
+            scope.launch {
+                if (deleteOld && selected != null) {
+                    withContext(Dispatchers.IO) { Storage.wipe(context, server.serverId, selected) }
+                }
+                config.setStorageId(target.id)
+                busy = false
+                SyncWorker.syncNow(context)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            title = { Text("Зберігати музику: ${target.label}?") },
+            text = {
+                Text(
+                    if (selected != null) {
+                        "Музику буде заново завантажено з комп'ютера в «${target.label}». " +
+                            "Що зробити з музикою, яка вже лежить у «${selected.label}»?"
+                    } else {
+                        "Музику буде заново завантажено з комп'ютера в «${target.label}»."
+                    },
+                )
+            },
+            confirmButton = {
+                if (selected != null) {
+                    Row {
+                        TextButton(onClick = { apply(false) }) { Text("Залишити") }
+                        TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
+                    }
+                } else {
+                    TextButton(onClick = { apply(false) }) { Text("Так") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Скасувати") } },
+        )
     }
 }
 
@@ -626,36 +782,36 @@ private fun SettingsCard(
 ) {
     var confirm by remember { mutableStateOf(false) }
     SectionCard {
-        Text("Настройки", style = MaterialTheme.typography.titleMedium)
+        Text("Налаштування", style = MaterialTheme.typography.titleMedium)
         SwitchRow(
-            title = "Автоматическая синхронизация",
-            subtitle = "Каждые 15 минут, когда телефон в домашней Wi-Fi сети и компьютер включён",
+            title = "Автоматична синхронізація",
+            subtitle = "Кожні 15 хвилин, коли телефон у домашній Wi-Fi мережі й комп'ютер увімкнено",
             checked = autoSync,
             onChange = onAutoSync,
         )
         SwitchRow(
-            title = "Удалять треки, удалённые на ПК",
-            subtitle = "Удаляются только файлы, загруженные этим приложением",
+            title = "Видаляти треки, видалені на ПК",
+            subtitle = "Видаляються лише файли, завантажені цим застосунком",
             checked = deleteRemoved,
             onChange = onDeleteRemoved,
         )
         HorizontalDivider()
         TextButton(onClick = { confirm = true }) {
-            Text("Отключиться от компьютера", color = MaterialTheme.colorScheme.error)
+            Text("Відключитися від комп'ютера", color = MaterialTheme.colorScheme.error)
         }
     }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Отключиться от компьютера?") },
-            text = { Text("Синхронизация прекратится. Музыка на телефоне останется.") },
+            title = { Text("Відключитися від комп'ютера?") },
+            text = { Text("Синхронізація припиниться. Музика на телефоні залишиться.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     onUnpair()
-                }) { Text("Отключиться", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Відключитися", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Скасувати") } },
         )
     }
 }

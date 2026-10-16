@@ -62,8 +62,8 @@ fun main(args: Array<String>) {
             tooltip = "Sync Music",
             onAction = { controller.requestShowWindow() },
             menu = {
-                Item("Открыть Sync Music", onClick = { controller.requestShowWindow() })
-                Item("Выход", onClick = { quit() })
+                Item("Відкрити Sync Music", onClick = { controller.requestShowWindow() })
+                Item("Вийти", onClick = { quit() })
             },
         )
 
@@ -85,8 +85,8 @@ fun main(args: Array<String>) {
                     if (!settings.trayHintShown) {
                         trayState.sendNotification(
                             Notification(
-                                "Sync Music работает в фоне",
-                                "Синхронизация продолжается. Открыть окно можно через значок в трее.",
+                                "Sync Music працює у фоні",
+                                "Синхронізація триває. Відкрити вікно можна через значок у треї.",
                                 Notification.Type.Info,
                             ),
                         )

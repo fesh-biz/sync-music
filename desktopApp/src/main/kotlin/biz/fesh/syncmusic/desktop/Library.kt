@@ -91,7 +91,7 @@ class Library {
     private fun scan(rootPath: String): Pair<Snapshot, String?> {
         val rootDir = File(rootPath)
         if (!rootDir.isDirectory) {
-            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis()) to "Папка не найдена"
+            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis()) to "Папку не знайдено"
         }
         val rootNio = rootDir.toPath()
         val entries = ArrayList<ManifestEntry>()
@@ -120,7 +120,7 @@ class Library {
             })
         } catch (t: Throwable) {
             AppLog.e("Scan failed for $rootPath", t)
-            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis()) to "Ошибка чтения папки: ${t.message}"
+            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis()) to "Помилка читання папки: ${t.message}"
         }
         entries.sortBy { it.path.lowercase() }
         return Snapshot(rootPath, entries, byPath, System.currentTimeMillis()) to null

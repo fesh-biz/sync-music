@@ -26,9 +26,9 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
-class UnauthorizedException : IOException("Компьютер не узнаёт этот телефон")
+class UnauthorizedException : IOException("Комп'ютер не впізнає цей телефон")
 class PairingException(message: String) : IOException(message)
-class FileGoneException(path: String) : IOException("Файл исчез на компьютере: $path")
+class FileGoneException(path: String) : IOException("Файл зник на комп'ютері: $path")
 class StoppedException : IOException("stopped")
 
 /** Finds the Wi-Fi (or Ethernet) network so LAN traffic never goes through mobile data or a VPN. */

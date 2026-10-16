@@ -61,6 +61,10 @@ class Config private constructor(context: Context) {
     private val _deleteRemoved = MutableStateFlow(prefs.getBoolean(KEY_DELETE_REMOVED, true))
     val deleteRemoved: StateFlow<Boolean> = _deleteRemoved.asStateFlow()
 
+    private val _storageId = MutableStateFlow(prefs.getString(KEY_STORAGE, null) ?: "primary")
+    /** Where music is kept: "primary" (phone memory) or an SD card volume id. */
+    val storageId: StateFlow<String> = _storageId.asStateFlow()
+
     private val _lastSync = MutableStateFlow(readJson(KEY_LAST_SYNC, LastSync.serializer()))
     val lastSync: StateFlow<LastSync?> = _lastSync.asStateFlow()
 
@@ -87,6 +91,12 @@ class Config private constructor(context: Context) {
         prefs.edit().putBoolean(KEY_DELETE_REMOVED, value).apply()
     }
 
+    fun setStorageId(value: String) {
+        _storageId.value = value
+        prefs.edit().putString(KEY_STORAGE, value).apply()
+        setLastSync(null)
+    }
+
     fun setLastSync(value: LastSync?) {
         _lastSync.value = value
         writeJson(KEY_LAST_SYNC, value, LastSync.serializer())
@@ -110,6 +120,7 @@ class Config private constructor(context: Context) {
         private const val KEY_AUTO_SYNC = "auto_sync"
         private const val KEY_DELETE_REMOVED = "delete_removed"
         private const val KEY_LAST_SYNC = "last_sync"
+        private const val KEY_STORAGE = "storage_id"
 
         @Volatile
         private var instance: Config? = null

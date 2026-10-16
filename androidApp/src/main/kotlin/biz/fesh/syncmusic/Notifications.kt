@@ -27,14 +27,14 @@ object Notifications {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_PROGRESS, "Ход синхронизации", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Показывается, пока музыка загружается с компьютера"
+            NotificationChannel(CHANNEL_PROGRESS, "Перебіг синхронізації", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Показується, поки музика завантажується з комп'ютера"
                 setShowBadge(false)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_DONE, "Синхронизация завершена", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Сколько треков добавлено или удалено"
+            NotificationChannel(CHANNEL_DONE, "Синхронізацію завершено", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Скільки треків додано або видалено"
             },
         )
     }
@@ -50,19 +50,19 @@ object Notifications {
     fun buildProgress(context: Context, progress: SyncProgress?): Notification {
         val builder = NotificationCompat.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(R.drawable.ic_stat_sync)
-            .setContentTitle("Синхронизация музыки")
+            .setContentTitle("Синхронізація музики")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openApp(context))
         if (progress == null || progress.totalFiles == 0) {
-            builder.setContentText("Подключение к компьютеру…").setProgress(0, 0, true)
+            builder.setContentText("Підключення до комп'ютера…").setProgress(0, 0, true)
         } else {
             val text = when (progress.phase) {
-                SyncPhase.DELETING -> "Удаление треков, удалённых на компьютере"
-                else -> "${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)} · " +
-                    "осталось ${Format.bytes(progress.remainingBytes)}"
+                SyncPhase.DELETING -> "Видалення треків, видалених на комп'ютері"
+                else -> "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · " +
+                    "залишилось ${Format.bytes(progress.remainingBytes)}"
             }
             builder.setContentText(text)
                 .setProgress(1000, (progress.fraction * 1000).toInt(), false)
@@ -102,9 +102,9 @@ object Notifications {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return
         val parts = mutableListOf<String>()
-        if (downloaded > 0) parts += "добавлено ${Format.files(downloaded)}"
-        if (deleted > 0) parts += "удалено ${Format.files(deleted)}"
-        val title = if (progress.phase == SyncPhase.DONE) "Музыка синхронизирована" else "Синхронизация остановлена"
+        if (downloaded > 0) parts += "додано ${Format.files(downloaded)}"
+        if (deleted > 0) parts += "видалено ${Format.files(deleted)}"
+        val title = if (progress.phase == SyncPhase.DONE) "Музику синхронізовано" else "Синхронізацію зупинено"
         val text = parts.joinToString(", ").replaceFirstChar { it.uppercase() }
         val notification = NotificationCompat.Builder(context, CHANNEL_DONE)
             .setSmallIcon(R.drawable.ic_stat_sync)

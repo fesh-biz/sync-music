@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicLong
 data class EngineState(
     val running: Boolean = false,
     val progress: SyncProgress? = null,
-    /** Short status such as "Компьютер не найден"; null when there is nothing to say. */
+    /** Short status such as "Комп'ютер не знайдено"; null when there is nothing to say. */
     val note: String? = null,
 )
 
@@ -61,7 +61,7 @@ object SyncEngine {
     suspend fun run(context: Context, manual: Boolean, goForeground: suspend () -> Unit): Outcome {
         if (!mutex.tryLock()) return Outcome.BUSY
         try {
-            _state.value = EngineState(running = true, note = "Поиск компьютера…")
+            _state.value = EngineState(running = true, note = "Пошук комп'ютера…")
             return Session(context.applicationContext, manual, goForeground).run()
         } finally {
             _state.update { it.copy(running = false) }
@@ -90,6 +90,7 @@ private class Session(
     @Volatile private var message: String? = null
     @Volatile private var speed = 0L
     @Volatile private var freeSpace = -1L
+    @Volatile private var storageLabel: String? = null
     private val transferred = AtomicLong(0)
     private var foregroundRequested = false
 
@@ -105,6 +106,7 @@ private class Session(
         deletedThisRun = deleted,
         message = message,
         freeSpaceBytes = freeSpace,
+        storage = storageLabel,
         appVersionCode = BuildConfig.VERSION_CODE,
         timestamp = System.currentTimeMillis(),
     )
@@ -122,13 +124,13 @@ private class Session(
 
     suspend fun run(): Outcome {
         val server = config.server.value ?: return note(Outcome.NOT_PAIRED, null)
-        if (server.revoked) return note(Outcome.UNAUTHORIZED, "Компьютер отключил этот телефон")
-        if (!Storage.hasAccess(ctx)) return note(Outcome.NO_ACCESS, "Нет доступа к памяти телефона — откройте приложение и разрешите доступ")
-        val network = WifiNet.find(ctx) ?: return note(Outcome.NO_WIFI, "Нет подключения к Wi-Fi")
+        if (server.revoked) return note(Outcome.UNAUTHORIZED, "Комп'ютер відключив цей телефон")
+        if (!Storage.hasAccess(ctx)) return note(Outcome.NO_ACCESS, "Немає доступу до пам'яті телефона — відкрийте застосунок і дозвольте доступ")
+        val network = WifiNet.find(ctx) ?: return note(Outcome.NO_WIFI, "Немає підключення до Wi-Fi")
         val http = Http.client(network)
 
         val api = resolve(server, http, network)
-            ?: return note(Outcome.NOT_FOUND, "Компьютер «${server.serverName}» не найден. Запустите Sync Music на ПК.")
+            ?: return note(Outcome.NOT_FOUND, "Комп'ютер «${server.serverName}» не знайдено. Запустіть Sync Music на ПК.")
 
         phase = SyncPhase.CONNECTING
         SyncEngine.publish(EngineState(running = true, progress = snapshot()))
@@ -137,11 +139,11 @@ private class Session(
             withContext(Dispatchers.IO) { api.manifest() }
         } catch (e: UnauthorizedException) {
             config.updateServer { it.copy(revoked = true) }
-            return note(Outcome.UNAUTHORIZED, "Компьютер отключил этот телефон. Подключитесь заново.")
+            return note(Outcome.UNAUTHORIZED, "Комп'ютер відключив цей телефон. Підключіться знову.")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            return finish(api, SyncPhase.ERROR, "Не удалось получить список файлов: ${e.message}", Outcome.FAILED)
+            return finish(api, SyncPhase.ERROR, "Не вдалося отримати список файлів: ${e.message}", Outcome.FAILED)
         }
 
         return sync(api, server, manifest)
@@ -178,9 +180,18 @@ private class Session(
         }
 
     private suspend fun sync(api: Api, server: PairedServer, manifest: Manifest): Outcome {
-        val root = Storage.musicRoot()
+        val storageId = config.storageId.value
+        val option = Storage.find(ctx, storageId)
+            ?: return finish(
+                api,
+                SyncPhase.ERROR,
+                "Вибрану пам'ять не знайдено (SD-карту вийнято?). Вставте картку або виберіть іншу пам'ять у налаштуваннях.",
+                Outcome.FAILED,
+            )
+        storageLabel = option.shortLabel
+        val root = option.musicRoot
         if (!root.isDirectory && !root.mkdirs()) {
-            return finish(api, SyncPhase.ERROR, "Не удалось создать папку Music/${Storage.FOLDER_NAME}", Outcome.FAILED)
+            return finish(api, SyncPhase.ERROR, "Не вдалося створити папку ${option.displayPath} (${option.label})", Outcome.FAILED)
         }
         val tmpDir = File(root, ".syncmusic")
         tmpDir.mkdirs()
@@ -189,7 +200,7 @@ private class Session(
         } catch (_: Throwable) {
         }
 
-        val db = SyncedDb.load(ctx, server.serverId)
+        val db = SyncedDb.load(ctx, server.serverId, storageId)
         val scanBatch = ArrayList<String>()
 
         try {
@@ -229,7 +240,7 @@ private class Session(
                     if (stale.isNotEmpty()) {
                         if (manifest.files.isEmpty()) {
                             // Safety net: never wipe the phone because the PC reported an empty library.
-                            message = "На компьютере нет музыки — удаление пропущено"
+                            message = "На комп'ютері немає музики — видалення пропущено"
                         } else if (config.deleteRemoved.value) {
                             foreground()
                             phase = SyncPhase.DELETING
@@ -271,14 +282,14 @@ private class Session(
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
-                finish(api, SyncPhase.STOPPED, "Синхронизация прервана, продолжится позже", Outcome.STOPPED)
+                finish(api, SyncPhase.STOPPED, "Синхронізацію перервано, продовжиться пізніше", Outcome.STOPPED)
             }
             throw e
         } catch (e: UnauthorizedException) {
             config.updateServer { it.copy(revoked = true) }
-            return finish(api, SyncPhase.ERROR, "Компьютер отключил этот телефон", Outcome.UNAUTHORIZED, report = false)
+            return finish(api, SyncPhase.ERROR, "Комп'ютер відключив цей телефон", Outcome.UNAUTHORIZED, report = false)
         } catch (e: Throwable) {
-            return finish(api, SyncPhase.ERROR, "Связь с компьютером потеряна: ${e.message}", Outcome.FAILED)
+            return finish(api, SyncPhase.ERROR, "Зв'язок із комп'ютером втрачено: ${e.message}", Outcome.FAILED)
         } finally {
             withContext(NonCancellable + Dispatchers.IO) {
                 db.save()
@@ -313,7 +324,7 @@ private class Session(
             val free = Storage.freeBytes(root)
             freeSpace = free
             if (free >= 0 && free < entry.size - have + RESERVE_BYTES) {
-                message = "Недостаточно места на телефоне"
+                message = "Недостатньо місця: ${storageLabel ?: "пам'ять телефона"}"
                 return null
             }
             currentFile = entry.path
@@ -335,7 +346,7 @@ private class Session(
                     )
                     if (part.length() != entry.size) {
                         part.delete()
-                        throw IOException("размер файла не совпал")
+                        throw IOException("розмір файлу не збігся")
                     }
                     break
                 } catch (e: FileGoneException) {
@@ -379,7 +390,7 @@ private class Session(
             if (downloaded % 10 == 0) db.save()
         }
         currentFile = null
-        if (skipped > 0 && message == null) message = "Пропущено файлов: $skipped (изменились на компьютере)"
+        if (skipped > 0 && message == null) message = "Пропущено файлів: $skipped (змінилися на комп'ютері)"
         return null
     }
 
