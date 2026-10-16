@@ -133,7 +133,7 @@ object ApkResource {
         }
     }
 
-    val available: Boolean get() = javaClass.getResource("/syncmusic.apk") != null
+    val available: Boolean by lazy { javaClass.getResource("/syncmusic.apk") != null }
 }
 
 object BuildInfo {

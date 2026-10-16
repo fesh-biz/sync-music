@@ -66,7 +66,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -97,6 +97,18 @@ jobs:
           path: dist/
           retention-days: 7
 
+      - name: Launch the app, screenshots and startup timings
+        continue-on-error: true
+        shell: pwsh
+        run: ./ci/windows_ui.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-windows-ui
+          path: win-out/
+          retention-days: 7
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -106,7 +118,7 @@ jobs:
 
   release:
     name: Publish release
-    needs: [android, windows]
+    needs: [android, windows, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -142,10 +154,71 @@ jobs:
             --notes-file notes.md \
             --latest
 
+  e2e:
+    name: End-to-end test (PC app + Android emulator)
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      SYNCMUSIC_SKIP_ANDROID: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      - name: Build the PC app (Linux)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p e2e-out
+          cp apk/syncmusic.apk apk/syncmusic-apk.txt desktopApp/src/main/resources/
+          ./gradlew --no-daemon --console=plain :desktopApp:createDistributable 2>&1 | tee e2e-out/e2e-build.log
+
+      - name: Install Xvfb and ImageMagick
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb imagemagick > /dev/null
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run end-to-end test on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disk-size: 6000M
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          script: python3 ci/e2e_android.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-e2e
+          path: e2e-out/
+          retention-days: 7
+
   report:
     name: Publish build logs
     if: always()
-    needs: [android, windows, release]
+    needs: [android, windows, e2e, release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -160,12 +233,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p out
-          cp logs/*.log out/ 2>/dev/null || true
+          cp -r logs/. out/ 2>/dev/null || true
           cat > out/status.txt <<EOF
           run=${{ github.run_number }}
           sha=${{ github.sha }}
           android=${{ needs.android.result }}
           windows=${{ needs.windows.result }}
+          e2e=${{ needs.e2e.result }}
           release=${{ needs.release.result }}
           EOF
           cd out

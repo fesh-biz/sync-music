@@ -25,26 +25,41 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
 import javax.imageio.ImageIO
-import javax.swing.UIManager
+import java.lang.management.ManagementFactory
+import biz.fesh.syncmusic.shared.SyncProgress
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val startMinimized = args.any { it == "--minimized" }
+    val headless = args.any { it == "--headless" }
 
     if (!SingleInstance.acquire()) {
+        AppLog.i("Second launch: asking the running copy to show its window (${sinceLaunch()} ms after launch)")
         signalExistingInstance()
         exitProcess(0)
     }
 
     Thread.setDefaultUncaughtExceptionHandler { thread, error -> AppLog.e("Uncaught exception in ${thread.name}", error) }
-    try {
-        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
-    } catch (_: Throwable) {
-    }
 
     val controller = AppController()
     controller.start()
+    AppLog.i("Core started ${sinceLaunch()} ms after launch")
+
+    // Used by automated tests: state is mirrored to status.json, commands are read from command.txt.
+    if (headless || args.any { it == "--status" }) {
+        thread(isDaemon = true, name = "status-mirror") { mirrorStatus(controller) }
+    }
+    if (headless) {
+        while (true) Thread.sleep(60_000)
+    }
+
     val appIcon = loadIcon()
+    val traySupported = try { java.awt.SystemTray.isSupported() } catch (_: Throwable) { false }
 
     application {
         var visible by remember { mutableStateOf(!startMinimized) }
@@ -56,16 +71,18 @@ fun main(args: Array<String>) {
             exitApplication()
         }
 
-        Tray(
-            icon = appIcon,
-            state = trayState,
-            tooltip = "Sync Music",
-            onAction = { controller.requestShowWindow() },
-            menu = {
-                Item("Відкрити Sync Music", onClick = { controller.requestShowWindow() })
-                Item("Вийти", onClick = { quit() })
-            },
-        )
+        if (traySupported) {
+            Tray(
+                icon = appIcon,
+                state = trayState,
+                tooltip = "Sync Music",
+                onAction = { controller.requestShowWindow() },
+                menu = {
+                    Item("Відкрити Sync Music", onClick = { controller.requestShowWindow() })
+                    Item("Вийти", onClick = { quit() })
+                },
+            )
+        }
 
         LaunchedEffect(Unit) {
             controller.events.collect { message ->
@@ -73,14 +90,20 @@ fun main(args: Array<String>) {
             }
         }
         LaunchedEffect(Unit) {
-            controller.showWindow.collect { visible = true }
+            controller.showWindow.collect {
+                if (!visible) AppLog.i("Showing window on request")
+                visible = true
+            }
+        }
+        LaunchedEffect(visible) {
+            if (visible) controller.onWindowShown()
         }
 
         val windowState = rememberWindowState(width = 1040.dp, height = 800.dp, position = WindowPosition(Alignment.Center))
 
         Window(
             onCloseRequest = {
-                if (settings.closeToTray) {
+                if (settings.closeToTray && traySupported) {
                     visible = false
                     if (!settings.trayHintShown) {
                         trayState.sendNotification(
@@ -102,6 +125,9 @@ fun main(args: Array<String>) {
             icon = appIcon,
         ) {
             LaunchedEffect(Unit) {
+                AppLog.i("Window composed ${sinceLaunch()} ms after launch")
+            }
+            LaunchedEffect(Unit) {
                 controller.showWindow.collect {
                     windowState.isMinimized = false
                     window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
@@ -111,6 +137,62 @@ fun main(args: Array<String>) {
             }
             App(controller)
         }
+    }
+}
+
+/** Milliseconds since the JVM (i.e. SyncMusic.exe) was started. */
+private fun sinceLaunch(): Long = try {
+    System.currentTimeMillis() - ManagementFactory.getRuntimeMXBean().startTime
+} catch (_: Throwable) {
+    -1
+}
+
+private fun mirrorStatus(controller: AppController) {
+    val file = File(AppPaths.dataDir, "status.json")
+    val commands = File(AppPaths.dataDir, "command.txt")
+    while (true) {
+        try {
+            if (commands.isFile) {
+                val text = commands.readText().trim()
+                commands.delete()
+                AppLog.i("Test command: $text")
+                when (text) {
+                    "remove-devices" -> controller.settings.value.devices.forEach { controller.removeDevice(it.id) }
+                    "rescan" -> controller.rescan()
+                    "show" -> controller.requestShowWindow()
+                }
+            }
+            val stats = controller.library.stats.value
+            val json = buildJsonObject {
+                put("pin", controller.pin.value)
+                put("server", controller.serverState.value.toString())
+                put("libraryFiles", stats.files)
+                put("libraryBytes", stats.bytes)
+                put("scannedAt", stats.scannedAt)
+                put("addresses", controller.addresses.value?.joinToString(",") { it.address } ?: "")
+                put(
+                    "devices",
+                    buildJsonArray {
+                        for (device in controller.settings.value.devices) {
+                            val live = controller.live.value[device.id]?.progress ?: device.lastProgress
+                            add(
+                                buildJsonObject {
+                                    put("name", device.name)
+                                    put("lastSeen", device.lastSeen)
+                                    if (live != null) put("progress", Protocol.json.encodeToJsonElement(SyncProgress.serializer(), live))
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            val tmp = File(file.parentFile, "status.json.tmp")
+            tmp.writeText(json.toString())
+            tmp.renameTo(file)
+        } catch (t: Throwable) {
+            AppLog.w("status.json failed", t)
+        }
+        Thread.sleep(500)
     }
 }
 

@@ -60,7 +60,15 @@ sourceSets {
 compose.desktop {
     application {
         mainClass = "biz.fesh.syncmusic.desktop.MainKt"
-        jvmArgs += listOf("-Xmx512m", "-Dfile.encoding=UTF-8")
+        jvmArgs += listOf(
+            "-Xmx512m",
+            "-Dfile.encoding=UTF-8",
+            // Class-data sharing archive created on first run, makes later launches faster (JDK 19+).
+            // IgnoreUnrecognizedVMOptions keeps older runtimes from refusing to start.
+            "-XX:+IgnoreUnrecognizedVMOptions",
+            "-XX:+AutoCreateSharedArchive",
+            "-XX:SharedArchiveFile=\$APPDIR/syncmusic.jsa",
+        )
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi)

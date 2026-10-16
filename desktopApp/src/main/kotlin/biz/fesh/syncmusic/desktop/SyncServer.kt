@@ -120,6 +120,7 @@ class SyncServer(private val app: AppController) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("not found"))
                     return@get
                 }
+                call.request.headers[HttpHeaders.Range]?.let { range -> AppLog.i("Resume $path from $range") }
                 call.respond(LocalFileContent(file, ContentType.Application.OctetStream))
             }
 
@@ -132,8 +133,13 @@ class SyncServer(private val app: AppController) {
 
             // Used by a second launch of the app to bring the existing window to front.
             post("/local/show") {
-                val remote = call.request.local.remoteAddress
-                if (remote == "127.0.0.1" || remote == "0:0:0:0:0:0:0:1" || remote == "::1" || remote == "localhost") {
+                val remote = call.request.local.remoteAddress.removePrefix("/")
+                val loopback = remote == "localhost" || try {
+                    java.net.InetAddress.getByName(remote).isLoopbackAddress
+                } catch (_: Throwable) {
+                    false
+                }
+                if (loopback) {
                     app.requestShowWindow()
                     call.respond(HttpStatusCode.NoContent)
                 } else {

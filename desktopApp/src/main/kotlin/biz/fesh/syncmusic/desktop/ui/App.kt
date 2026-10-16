@@ -71,13 +71,11 @@ fun App(controller: AppController) {
     val pin by controller.pin.collectAsState()
     val live by controller.live.collectAsState()
     val serverState by controller.serverState.collectAsState()
-    val now by produceState(System.currentTimeMillis()) {
-        while (true) {
-            delay(1_000)
-            value = System.currentTimeMillis()
-        }
-    }
-    val addresses = remember(now / 30_000) { NetUtil.localAddresses() }
+    // Network adapters are enumerated in the background: on Windows with WSL/Hyper-V/VPN adapters
+    // this can take seconds and must never block the window.
+    val loadedAddresses by controller.addresses.collectAsState()
+    val addresses = loadedAddresses.orEmpty()
+    val addressesLoading = loadedAddresses == null
 
     SyncMusicTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -85,12 +83,12 @@ fun App(controller: AppController) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Header(serverState, addresses, settings.port)
+                Header(serverState, addresses, addressesLoading, settings.port)
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.fillMaxWidth()) {
                     LibraryCard(Modifier.weight(1f), stats, settings, controller)
-                    ConnectCard(Modifier.weight(1.25f), pin, addresses, settings.port, controller)
+                    ConnectCard(Modifier.weight(1.25f), pin, addresses, addressesLoading, settings.port, controller)
                 }
-                DevicesSection(settings, live, now, controller)
+                DevicesSection(settings, live, controller)
                 SettingsCard(settings, controller)
                 Text(
                     "Sync Music ${BuildInfo.version}",
@@ -103,7 +101,7 @@ fun App(controller: AppController) {
 }
 
 @Composable
-private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddress>, port: Int) {
+private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddress>, addressesLoading: Boolean, port: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
@@ -116,11 +114,11 @@ private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddres
         when (serverState) {
             is ServerState.Running -> {
                 val address = addresses.firstOrNull()?.address
-                StatusPill(
-                    text = if (address != null) "Працює · $address:$port" else "Працює · немає мережі",
-                    color = if (address != null) Palette.Green else Palette.Amber,
-                    background = if (address != null) Palette.GreenSoft else Palette.AmberSoft,
-                )
+                when {
+                    address != null -> StatusPill("Працює · $address:$port", Palette.Green, Palette.GreenSoft)
+                    addressesLoading -> StatusPill("Працює", Palette.Green, Palette.GreenSoft)
+                    else -> StatusPill("Працює · немає мережі", Palette.Amber, Palette.AmberSoft)
+                }
             }
             ServerState.Starting -> StatusPill("Запуск…", Palette.Grey, Palette.GreySoft)
             is ServerState.Failed -> StatusPill(serverState.message, Palette.Red, Palette.RedSoft)
@@ -202,7 +200,16 @@ private fun LibraryCard(modifier: Modifier, stats: LibraryStats, settings: Setti
     }
 }
 
+private var lookAndFeelSet = false
+
 private fun chooseFolder(initial: String?): String? {
+    if (!lookAndFeelSet) {
+        lookAndFeelSet = true
+        try {
+            javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName())
+        } catch (_: Throwable) {
+        }
+    }
     val chooser = JFileChooser(initial ?: System.getProperty("user.home")).apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
         dialogTitle = "Виберіть папку з музикою"
@@ -218,6 +225,7 @@ private fun ConnectCard(
     modifier: Modifier,
     pin: String,
     addresses: List<NetUtil.LocalAddress>,
+    addressesLoading: Boolean,
     port: Int,
     controller: AppController,
 ) {
@@ -251,6 +259,8 @@ private fun ConnectCard(
             Muted(
                 "Адреса комп'ютера для ручного введення: " + addresses.joinToString(", ") { it.address },
             )
+        } else if (addressesLoading) {
+            Muted("Визначаємо адресу комп'ютера…")
         } else {
             Text("Комп'ютер не підключений до мережі", color = MaterialTheme.colorScheme.error)
         }
@@ -274,7 +284,13 @@ private fun Step(number: String, title: String) {
 // ---------------------------------------------------------------- devices
 
 @Composable
-private fun DevicesSection(settings: Settings, live: Map<String, LiveStatus>, now: Long, controller: AppController) {
+private fun DevicesSection(settings: Settings, live: Map<String, LiveStatus>, controller: AppController) {
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            delay(1_000)
+            value = System.currentTimeMillis()
+        }
+    }
     Text("Телефони", style = MaterialTheme.typography.titleLarge)
     if (settings.devices.isEmpty()) {
         SectionCard(Modifier.fillMaxWidth()) {

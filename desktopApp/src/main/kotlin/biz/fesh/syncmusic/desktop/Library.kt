@@ -64,6 +64,10 @@ class Library {
         ensureFresh(0)
     }
 
+    suspend fun refreshIfOlderThan(maxAgeMs: Long) {
+        ensureFresh(maxAgeMs)
+    }
+
     private suspend fun ensureFresh(maxAgeMs: Long): Snapshot? = mutex.withLock {
         val currentRoot = root ?: return@withLock null
         val existing = snapshot
@@ -73,7 +77,12 @@ class Library {
             return@withLock existing
         }
         _stats.value = _stats.value.copy(root = currentRoot, scanning = true)
+        val started = System.currentTimeMillis()
         val fresh = withContext(Dispatchers.IO) { scan(currentRoot) }
+        val previous = existing?.entries?.size
+        if (previous != fresh.first.entries.size) {
+            AppLog.i("Scanned ${fresh.first.entries.size} files in ${System.currentTimeMillis() - started} ms (was $previous)")
+        }
         if (root == currentRoot) {
             snapshot = fresh.first
             _stats.value = LibraryStats(

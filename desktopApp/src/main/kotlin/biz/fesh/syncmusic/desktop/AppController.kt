@@ -57,6 +57,10 @@ class AppController {
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
+    /** null until the first (background) lookup finishes. */
+    private val _addresses = MutableStateFlow<List<NetUtil.LocalAddress>?>(null)
+    val addresses: StateFlow<List<NetUtil.LocalAddress>?> = _addresses.asStateFlow()
+
     private val _showWindow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val showWindow: SharedFlow<Unit> = _showWindow.asSharedFlow()
 
@@ -77,6 +81,10 @@ class AppController {
     private val server = SyncServer(this)
     private val discovery = DiscoveryResponder { serverInfo() }
     private val lastPersist = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val watcher = FolderWatcher(scope) {
+        AppLog.i("Music folder changed, rescanning")
+        library.rescan()
+    }
 
     fun start() {
         AppLog.i("Starting Sync Music ${BuildInfo.version}")
@@ -91,10 +99,21 @@ class AppController {
             scope.launch(Dispatchers.IO) { WindowsIntegration.setAutostart(true) }
         }
         library.setRoot(settings.value.musicFolder)
+        watcher.watch(settings.value.musicFolder)
         scope.launch { library.rescan() }
         startServer()
         discovery.start()
-        // Periodic rescan keeps the numbers on screen fresh.
+        // Network adapters change rarely; enumerating them can be slow on Windows, so do it off the UI thread.
+        scope.launch(Dispatchers.IO) {
+            while (true) {
+                val started = System.currentTimeMillis()
+                val list = NetUtil.localAddresses()
+                if (_addresses.value == null) AppLog.i("Network addresses $list in ${System.currentTimeMillis() - started} ms")
+                _addresses.value = list
+                delay(30_000)
+            }
+        }
+        // Safety net in case a change notification was missed.
         scope.launch {
             while (true) {
                 delay(120_000)
@@ -119,6 +138,7 @@ class AppController {
     }
 
     fun shutdown() {
+        watcher.stop()
         discovery.stop()
         server.stop()
     }
@@ -135,11 +155,17 @@ class AppController {
         _showWindow.tryEmit(Unit)
     }
 
+    /** Called when the window becomes visible: make sure the numbers are current. */
+    fun onWindowShown() {
+        scope.launch { library.refreshIfOlderThan(10_000) }
+    }
+
     // ---------- library ----------
 
     fun setMusicFolder(path: String) {
         settings.update { it.copy(musicFolder = path) }
         library.setRoot(path)
+        watcher.watch(path)
         scope.launch { library.rescan() }
     }
 

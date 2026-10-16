@@ -216,12 +216,27 @@ private class Session(
                         totalBytes = manifest.files.sumOf { it.size }
                         var okFiles = 0
                         var okBytes = 0L
+                        // One directory listing per folder instead of a stat() per file:
+                        // with ~30 000 tracks this is many times faster, especially on SD cards.
+                        val listings = HashMap<String, Set<String>>()
+                        fun listed(path: String): Boolean {
+                            val parent = path.substringBeforeLast('/', "")
+                            val names = listings.getOrPut(parent) {
+                                File(root, parent).list()?.toHashSet() ?: emptySet()
+                            }
+                            return path.substringAfterLast('/') in names
+                        }
                         for (entry in manifest.files) {
                             val dest = Storage.resolve(root, entry.path) ?: continue
                             serverPaths += entry.path
                             val record = db[entry.path]
-                            val upToDate = dest.isFile && dest.length() == entry.size &&
-                                (record == null || (record.s == entry.size && record.m == entry.modified))
+                            val known = record != null && record.s == entry.size && record.m == entry.modified
+                            val upToDate = if (known && listed(entry.path)) {
+                                true
+                            } else {
+                                // Unknown, changed on the PC, or not found by name: check the real file.
+                                dest.isFile && dest.length() == entry.size && (record == null || known)
+                            }
                             if (upToDate) {
                                 if (record == null) db.put(entry.path, SyncedRecord(entry.size, entry.modified))
                                 okFiles++
