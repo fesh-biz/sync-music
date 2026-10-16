@@ -1,0 +1,177 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :androidApp:assembleRelease 2>&1 | tee android-build.log
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p apk
+          cp androidApp/build/outputs/apk/release/androidApp-release.apk apk/syncmusic.apk
+          echo "${{ github.run_number }}" > apk/syncmusic-apk.txt
+          ls -la apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: apk/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-android
+          path: android-build.log
+          retention-days: 7
+
+  windows:
+    name: Windows installer
+    needs: android
+    runs-on: windows-latest
+    env:
+      SYNCMUSIC_SKIP_ANDROID: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Bundle APK into the PC app
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: desktopApp/src/main/resources
+
+      - name: Build MSI and portable app
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --console=plain :desktopApp:packageMsi :desktopApp:createDistributable 2>&1 | tee windows-build.log
+
+      - name: Collect files
+        shell: pwsh
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Get-ChildItem desktopApp/build/compose/binaries/main/msi/*.msi | Select-Object -First 1 | Copy-Item -Destination "dist/SyncMusic-$version.msi"
+          Compress-Archive -Path desktopApp/build/compose/binaries/main/app/SyncMusic -DestinationPath "dist/SyncMusic-$version-portable.zip"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-windows
+          path: windows-build.log
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="1.0.${{ github.run_number }}"
+          cp apk/syncmusic.apk "dist/SyncMusic-$version.apk"
+          cat > notes.md <<EOF
+          **Установка**
+
+          1. На компьютере: скачайте и запустите \`SyncMusic-$version.msi\` (права администратора не нужны).
+             Если установщик не подходит — распакуйте \`SyncMusic-$version-portable.zip\` и запустите \`SyncMusic.exe\`.
+          2. На телефоне: отсканируйте камерой QR-код из окна программы на ПК — скачается приложение.
+             Или скачайте \`SyncMusic-$version.apk\` отсюда.
+          3. В приложении на телефоне нажмите «Найти компьютер» и введите код с экрана ПК.
+
+          Коммит: ${{ github.sha }}
+          EOF
+          gh release create "v$version" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "Sync Music $version" \
+            --notes-file notes.md \
+            --latest
+
+  report:
+    name: Publish build logs
+    if: always()
+    needs: [android, windows, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: log-*
+          path: logs
+          merge-multiple: true
+
+      - name: Push logs to ci-logs branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p out
+          cp logs/*.log out/ 2>/dev/null || true
+          cat > out/status.txt <<EOF
+          run=${{ github.run_number }}
+          sha=${{ github.sha }}
+          android=${{ needs.android.result }}
+          windows=${{ needs.windows.result }}
+          release=${{ needs.release.result }}
+          EOF
+          cd out
+          git init -q -b ci-logs
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build logs for run ${{ github.run_number }}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" ci-logs

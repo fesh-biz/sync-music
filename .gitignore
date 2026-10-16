@@ -1,0 +1,11 @@
+.gradle/
+build/
+.kotlin/
+.idea/
+*.iml
+local.properties
+.DS_Store
+captures/
+# Bundled at CI time from the Android build
+desktopApp/src/main/resources/syncmusic.apk
+desktopApp/src/main/resources/syncmusic-apk.txt
