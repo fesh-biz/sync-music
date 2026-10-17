@@ -29,8 +29,8 @@ echo no | "$TOOLS/avdmanager" create avd -n e2e -k "$IMAGE" -d pixel_6 --force >
 CFG="$ANDROID_AVD_HOME/e2e.avd/config.ini"
 ls -la "$ANDROID_AVD_HOME" >> "$DIAG" 2>&1
 {
-  echo "hw.ramSize=4096"
-  echo "disk.dataPartition.size=6000M"
+  echo "hw.ramSize=3072"
+  echo "disk.dataPartition.size=4000M"
   echo "hw.cpu.ncore=$(nproc)"
   echo "hw.keyboard=yes"
 } >> "$CFG"
