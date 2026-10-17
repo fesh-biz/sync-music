@@ -97,16 +97,19 @@ compose.desktop {
 // and lets -XX:+AutoCreateSharedArchive add the app's own classes on first exit.
 tasks.matching { it.name == "createRuntimeImage" }.configureEach {
     doLast {
-        outputs.files.files.forEach { dir ->
-            val java = listOf("bin/java.exe", "bin/java").map { File(dir, it) }.firstOrNull { it.isFile }
-            if (java != null) {
-                val process = ProcessBuilder(java.absolutePath, "-Xshare:dump")
-                    .redirectErrorStream(true)
-                    .start()
-                val output = process.inputStream.bufferedReader().readText()
-                val code = process.waitFor()
-                logger.lifecycle("CDS base archive for ${dir.name}: exit $code ${output.lines().lastOrNull { it.isNotBlank() }.orEmpty()}")
-            }
+        val roots = outputs.files.files.filter { it.exists() }
+        val java = roots.asSequence()
+            .flatMap { root -> root.walkTopDown().maxDepth(4) }
+            .firstOrNull { it.isFile && (it.name == "java" || it.name == "java.exe") && it.parentFile?.name == "bin" }
+        if (java == null) {
+            logger.lifecycle("CDS base archive: no java launcher found in $roots")
+        } else {
+            val process = ProcessBuilder(java.absolutePath, "-Xshare:dump")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            val code = process.waitFor()
+            logger.lifecycle("CDS base archive via $java: exit $code ${output.lines().lastOrNull { it.isNotBlank() }.orEmpty()}")
         }
     }
 }

@@ -57,4 +57,6 @@ adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
 adb shell input keyevent 82 >/dev/null 2>&1 || true
+# The launcher is not needed for the test and tends to stall on a slow emulator.
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher >> "$DIAG" 2>&1 || true
 exit 0

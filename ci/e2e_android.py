@@ -45,17 +45,20 @@ def check(name, ok, detail=""):
     status = "PASS" if ok else "FAIL"
     results.append((status, name, str(detail)))
     print(f"[{status}] {name} {detail}", flush=True)
+    write_report()
     return bool(ok)
 
 
 def skip(name, detail=""):
     results.append(("SKIP", name, str(detail)))
     print(f"[SKIP] {name} {detail}", flush=True)
+    write_report()
 
 
 def timing(name, value):
     timings.append((name, value))
     print(f"[TIME] {name}: {value}", flush=True)
+    write_report()
 
 
 def write_report():
@@ -113,18 +116,41 @@ def screen_size():
 
 
 def ui_nodes():
-    for _ in range(6):
+    for _ in range(8):
         raw = sh("uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; cat /sdcard/ui.xml", timeout=60)
         start = raw.find("<?xml")
         if start < 0:
             start = raw.find("<hierarchy")
         if start >= 0:
             try:
-                return list(ET.fromstring(raw[start:]).iter("node"))
+                nodes = list(ET.fromstring(raw[start:]).iter("node"))
             except ET.ParseError:
-                pass
+                nodes = None
+            if nodes is not None:
+                if dismiss_system_dialog(nodes):
+                    continue
+                return nodes
         time.sleep(1)
     return []
+
+
+def dismiss_system_dialog(nodes):
+    """The slow emulator sometimes shows "<system app> isn't responding"; it is not ours, close it."""
+    texts = [node_text(n) for n in nodes]
+    if not any("isn't responding" in t or "keeps stopping" in t for t in texts):
+        return False
+    if any(PKG in (n.get("package") or "") and "isn't responding" in node_text(n) for n in nodes):
+        check("No 'not responding' dialog for Sync Music", False, " | ".join(t for t in texts if t)[:200])
+    for label in ("Wait", "Close app", "OK"):
+        for n in nodes:
+            if node_text(n) == label:
+                x, y = center(n)
+                sh(f"input tap {x} {y}")
+                time.sleep(1.5)
+                return True
+    sh("input keyevent KEYCODE_BACK")
+    time.sleep(1)
+    return True
 
 
 def node_text(n):
