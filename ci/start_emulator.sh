@@ -9,6 +9,8 @@ API=33
 IMAGE="system-images;android-${API};google_apis;x86_64"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 export ANDROID_SDK_ROOT="$SDK" ANDROID_HOME="$SDK"
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 TOOLS="$SDK/cmdline-tools/latest/bin"
 [ -x "$TOOLS/sdkmanager" ] || TOOLS="$(dirname "$(command -v sdkmanager)")"
 
@@ -24,11 +26,12 @@ echo "== accel-check" >> "$DIAG"
 "$SDK/emulator/emulator" -accel-check >> "$DIAG" 2>&1
 
 echo no | "$TOOLS/avdmanager" create avd -n e2e -k "$IMAGE" -d pixel_6 --force >> "$DIAG" 2>&1
-CFG="$HOME/.android/avd/e2e.avd/config.ini"
+CFG="$ANDROID_AVD_HOME/e2e.avd/config.ini"
+ls -la "$ANDROID_AVD_HOME" >> "$DIAG" 2>&1
 {
   echo "hw.ramSize=4096"
   echo "disk.dataPartition.size=6000M"
-  echo "hw.cpu.ncore=4"
+  echo "hw.cpu.ncore=$(nproc)"
   echo "hw.keyboard=yes"
 } >> "$CFG"
 
