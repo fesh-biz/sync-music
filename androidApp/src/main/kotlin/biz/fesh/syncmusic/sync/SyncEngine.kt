@@ -1,6 +1,7 @@
 package biz.fesh.syncmusic.sync
 
 import android.content.Context
+import android.util.Log
 import biz.fesh.syncmusic.BuildConfig
 import biz.fesh.syncmusic.Notifications
 import biz.fesh.syncmusic.data.Config
@@ -136,7 +137,9 @@ private class Session(
         SyncEngine.publish(EngineState(running = true, progress = snapshot()))
 
         val manifest: Manifest = try {
-            withContext(Dispatchers.IO) { api.manifest() }
+            withContext(Dispatchers.IO) { api.manifest() }.also {
+                Log.i(TAG, "Manifest: ${it.files.size} files in ${elapsed()} ms")
+            }
         } catch (e: UnauthorizedException) {
             config.updateServer { it.copy(revoked = true) }
             return note(Outcome.UNAUTHORIZED, "Комп'ютер відключив цей телефон. Підключіться знову.")
@@ -250,6 +253,8 @@ private class Session(
                         freeSpace = Storage.freeBytes(root)
                     }
 
+                    Log.i(TAG, "Compared: ${pending.size} to download, $syncedFiles up to date, after ${elapsed()} ms")
+
                     // ---- delete what disappeared on the PC
                     val stale = db.paths.filter { it !in serverPaths }
                     if (stale.isNotEmpty()) {
@@ -261,17 +266,20 @@ private class Session(
                             phase = SyncPhase.DELETING
                             withContext(Dispatchers.IO) {
                                 val removed = ArrayList<String>()
+                                val parents = HashSet<File>()
                                 for (path in stale) {
                                     val file = Storage.resolve(root, path)
-                                    if (file != null && file.isFile && file.delete()) {
+                                    if (file != null && file.delete()) {
                                         deleted++
                                         removed += file.absolutePath
-                                        Storage.pruneEmptyParents(root, file)
+                                        file.parentFile?.let(parents::add)
                                     }
                                     db.remove(path)
                                 }
+                                Storage.pruneDirs(root, parents)
                                 db.save()
                                 Storage.scan(ctx, removed)
+                                Log.i(TAG, "Deleted $deleted files in ${elapsed()} ms")
                             }
                         } else {
                             stale.forEach(db::remove)
@@ -468,12 +476,17 @@ private class Session(
                 }
             }
         }
+        Log.i(TAG, "Finished $finalPhase after ${elapsed()} ms: downloaded=$downloaded deleted=$deleted ${text.orEmpty()}")
         Notifications.cancelProgress(ctx)
         if (downloaded > 0 || deleted > 0) Notifications.showDone(ctx, downloaded, deleted, progress)
         return outcome
     }
 
+    private val startedAt = System.currentTimeMillis()
+    private fun elapsed() = System.currentTimeMillis() - startedAt
+
     companion object {
+        private const val TAG = "SyncEngine"
         private const val RESERVE_BYTES = 200L * 1024 * 1024
 
         private fun partName(path: String): String {

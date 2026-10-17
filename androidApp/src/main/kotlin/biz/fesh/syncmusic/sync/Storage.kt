@@ -152,6 +152,25 @@ object Storage {
     }
 
     /**
+     * Removes the given folders (and then their parents) while they are empty, deepest first,
+     * never touching [root] itself. rmdir fails on a non-empty folder, so no listing is needed.
+     */
+    fun pruneDirs(root: File, dirs: Collection<File>) {
+        val rootPrefix = root.absolutePath.trimEnd('/') + "/"
+        val tried = HashSet<String>()
+        var current: List<File> = dirs.toList()
+        while (current.isNotEmpty()) {
+            val next = HashSet<File>()
+            for (dir in current.sortedByDescending { it.absolutePath.length }) {
+                val path = dir.absolutePath
+                if (!path.startsWith(rootPrefix) || !tried.add(path)) continue
+                if (dir.delete()) dir.parentFile?.let(next::add)
+            }
+            current = next.toList()
+        }
+    }
+
+    /**
      * Deletes the music this app put into [option] (only files it downloaded itself)
      * and forgets them. Returns the number of deleted files.
      */
@@ -159,13 +178,15 @@ object Storage {
         val db = SyncedDb.load(context, serverId, option.id)
         val root = option.musicRoot
         val removed = ArrayList<String>()
+        val parents = HashSet<File>()
         for (path in db.paths) {
             val file = resolve(root, path) ?: continue
-            if (file.isFile && file.delete()) {
+            if (file.delete()) {
                 removed += file.absolutePath
-                pruneEmptyParents(root, file)
+                file.parentFile?.let(parents::add)
             }
         }
+        pruneDirs(root, parents)
         File(root, ".syncmusic").deleteRecursively()
         if (root.isDirectory && root.list()?.isEmpty() == true) root.delete()
         db.clear()

@@ -391,7 +391,7 @@ def pair():
     # Automatic UDP search runs first and cannot reach the host through the emulator NAT.
     wait_for("Шукати знову", 25)
     to_top()
-    if not wait_for("192.168.1.10", 10):
+    if wait_for("192.168.1.10", 10) is None:
         swipe(up=True)
     edits = [n for n in ui_nodes() if n.get("class") == "android.widget.EditText"]
     check("Manual address field present", len(edits) >= 1, f"{len(edits)} fields")
@@ -412,7 +412,9 @@ def pair():
     type_into(0, pin)
     since = time.time()
     tap_text("Підключити", 10)
-    paired = wait_for("Синхронізувати зараз", 30) or wait_for("Триває синхронізація", 5)
+    paired = wait_for("Синхронізувати зараз", 30)
+    if paired is None:
+        paired = wait_for("Триває синхронізація", 5)
     check("Paired with correct code", paired is not None, f"pin={pin}")
     shot("04-paired")
     return since
