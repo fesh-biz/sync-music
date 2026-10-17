@@ -894,7 +894,9 @@ def scenario_remove_folder():
     while time.time() - removed_at < 60:
         p = device_progress()
         names = [f.get("name") for f in p.get("folders") or []]
-        if p.get("timestamp", 0) / 1000 >= removed_at and big.name not in names and p.get("phase") in ("DONE", "ERROR", "STOPPED"):
+        # No timestamp check here: the phone stops within a second or two, and the emulator clock may
+        # lag the host clock by more than that. Before the removal this folder is in the list anyway.
+        if big.name not in names and p.get("phase") in ("DONE", "ERROR", "STOPPED"):
             stopped = p
             break
         time.sleep(0.5)
