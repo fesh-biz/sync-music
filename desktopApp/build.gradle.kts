@@ -60,15 +60,7 @@ sourceSets {
 compose.desktop {
     application {
         mainClass = "biz.fesh.syncmusic.desktop.MainKt"
-        jvmArgs += listOf(
-            "-Xmx512m",
-            "-Dfile.encoding=UTF-8",
-            // Class-data sharing archive created on first run, makes later launches faster (JDK 19+).
-            // IgnoreUnrecognizedVMOptions keeps older runtimes from refusing to start.
-            "-XX:+IgnoreUnrecognizedVMOptions",
-            "-XX:+AutoCreateSharedArchive",
-            "-XX:SharedArchiveFile=\$APPDIR/syncmusic.jsa",
-        )
+        jvmArgs += listOf("-Xmx512m", "-Dfile.encoding=UTF-8")
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi)
@@ -89,27 +81,6 @@ compose.desktop {
                 upgradeUuid = "8f0e5f43-7c1e-4b8e-9a51-3d2a6c9b7e21"
                 iconFile.set(project.file("src/main/packaging/icon.ico"))
             }
-        }
-    }
-}
-
-// jlink images come without the JDK's class-data archive. Generating it makes every launch faster
-// and lets -XX:+AutoCreateSharedArchive add the app's own classes on first exit.
-tasks.matching { it.name == "createRuntimeImage" }.configureEach {
-    doLast {
-        val roots = outputs.files.files.filter { it.exists() }
-        val java = roots.asSequence()
-            .flatMap { root -> root.walkTopDown().maxDepth(4) }
-            .firstOrNull { it.isFile && (it.name == "java" || it.name == "java.exe") && it.parentFile?.name == "bin" }
-        if (java == null) {
-            logger.lifecycle("CDS base archive: no java launcher found in $roots")
-        } else {
-            val process = ProcessBuilder(java.absolutePath, "-Xshare:dump")
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText()
-            val code = process.waitFor()
-            logger.lifecycle("CDS base archive via $java: exit $code ${output.lines().lastOrNull { it.isNotBlank() }.orEmpty()}")
         }
     }
 }

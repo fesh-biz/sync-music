@@ -81,10 +81,9 @@ while ($sw.Elapsed.TotalSeconds -lt 30) {
 Start-Sleep 2
 Shot 'win-3b-reopened'
 
-# 4. Quit normally (the JVM writes its class-data archive on exit), then launch again
+# 4. Quit normally, then launch again
 'quit' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
 if (-not $p.WaitForExit(30000)) { "app did not quit" | Out-File -Append (Join-Path $out 'win-notes.txt'); Stop-Process -Id $p.Id -Force }
-Get-ChildItem (Split-Path $exe) -Recurse -Filter *.jsa | ForEach-Object { "CDS archive: $($_.FullName) $($_.Length) bytes" } | Out-File -Append (Join-Path $out 'win-notes.txt')
 
 foreach ($i in 1..2) {
     $p = Start-Process $exe -ArgumentList '--status' -PassThru
