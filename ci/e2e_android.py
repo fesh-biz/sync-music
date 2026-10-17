@@ -42,6 +42,9 @@ JUNK = {"thumbs.db", "desktop.ini", "ehthumbs.db"}
 def syncable(name: str) -> bool:
     return bool(name) and not name.startswith(".") and not name.startswith("~$") and name.lower() not in JUNK
 
+STARTED = time.time()
+TIME_BUDGET = 130 * 60  # the CI job has 160 minutes, leave room for logs and the report
+
 results: list[tuple[str, str, str]] = []
 timings: list[tuple[str, str]] = []
 pc_proc = None
@@ -237,20 +240,40 @@ def tap_text(text, timeout=30):
     return True
 
 
+def edit_fields():
+    return [n for n in ui_nodes() if n.get("class") == "android.widget.EditText"]
+
+
 def type_into(edit_index, value):
-    nodes = [n for n in ui_nodes() if n.get("class") == "android.widget.EditText"]
-    if len(nodes) <= edit_index:
-        return False
-    tap(nodes[edit_index])
-    sh("input keyevent KEYCODE_MOVE_END")
-    for _ in range(12):
-        sh("input keyevent KEYCODE_DEL")
-    sh(f"input text {value}")
-    time.sleep(0.5)
+    """Types into a text field and checks that the text really arrived: right after the tap the
+    keyboard may not be connected to the field yet, and then `input text` is silently lost."""
+    typed = False
+    for attempt in range(4):
+        nodes = edit_fields()
+        if len(nodes) <= edit_index:
+            return False
+        tap(nodes[edit_index])
+        for _ in range(10):
+            if "mInputShown=true" in sh("dumpsys input_method"):
+                break
+            time.sleep(0.5)
+        time.sleep(0.5 + attempt)
+        sh("input keyevent KEYCODE_MOVE_END")
+        sh("input keyevent " + " ".join(["KEYCODE_DEL"] * 14))
+        sh(f"input text {value}")
+        time.sleep(0.8)
+        nodes = edit_fields()
+        got = (nodes[edit_index].get("text") or "") if len(nodes) > edit_index else ""
+        if value in got:
+            typed = True
+            break
+        print(f"typing {value!r}, attempt {attempt + 1}: the field shows {got!r}", flush=True)
+    if not typed:
+        print(f"typing {value!r} failed", flush=True)
     if "mInputShown=true" in sh("dumpsys input_method"):
         sh("input keyevent KEYCODE_BACK")  # hide the keyboard (only when it is shown)
         time.sleep(0.5)
-    return True
+    return typed
 
 
 def cold_start(label):
@@ -470,6 +493,9 @@ def pair():
         paired = wait_for("Триває синхронізація", 5)
     check("Paired with correct code", paired is not None, f"pin={pin}")
     shot("04-paired")
+    if paired is None:
+        # Nothing else can work without pairing: stop instead of timing out in every scenario.
+        raise RuntimeError("pairing failed, the remaining scenarios were not run")
     return since
 
 
@@ -806,6 +832,9 @@ def main():
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
                          scenario_camera, scenario_docs, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
                          scenario_revoke):
+            if time.time() - STARTED > TIME_BUDGET:
+                check(f"{scenario.__name__} not run: e2e time budget used up", False)
+                continue
             try:
                 scenario()
             except Exception as e:  # noqa: BLE001
