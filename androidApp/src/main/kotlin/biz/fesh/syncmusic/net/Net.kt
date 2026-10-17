@@ -241,23 +241,6 @@ class Api(
         }
     }
 
-    /** Asks the PC to delete a file this phone uploaded earlier. Returns false if the PC kept it. */
-    fun deleteRemote(folderId: String, path: String, size: Long): Boolean {
-        val deleteUrl = url("api/file")
-            .addQueryParameter("folder", folderId)
-            .addQueryParameter("path", path)
-            .addQueryParameter("size", size.toString())
-            .build()
-        return http.newCall(request(deleteUrl).delete().build()).execute().use { r ->
-            when (r.code) {
-                204, 200 -> true
-                409, 403 -> false
-                401 -> throw UnauthorizedException()
-                else -> throw IOException("HTTP ${r.code}")
-            }
-        }
-    }
-
     fun sendProgress(progress: SyncProgress) {
         val body = Protocol.json.encodeToString(SyncProgress.serializer(), progress).toRequestBody(jsonType)
         val client = http.newBuilder().connectTimeout(2, TimeUnit.SECONDS).readTimeout(4, TimeUnit.SECONDS).build()

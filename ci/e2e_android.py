@@ -543,7 +543,7 @@ def pc_files(root: Path):
 
 
 def scenario_camera():
-    """Phone -> PC folder: choose the phone folder, upload, the delete switch, resume."""
+    """Phone -> PC folder: choose the phone folder, upload, nothing deleted or overwritten on the PC, resume."""
     src = WORK / "cam-src"
     names = ["IMG_0001.jpg", "IMG_0002.jpg", "Відео з відпустки.mp4", "2026/Квітень/IMG_0100.jpg", "2026/notes.txt"]
     for i, name in enumerate(names):
@@ -572,20 +572,39 @@ def scenario_camera():
     check("Phone files arrived on the PC", got == want, f"{len(got)}/{len(want)}")
     shot("18-camera-uploaded")
 
-    # The delete switch is off by default for phone -> PC: the PC keeps a copy.
+    # Nothing is ever deleted on the PC: not by default, and not even if a delete switch is forced on.
     sh(f"rm {q(CAMERA_PHONE + '/IMG_0001.jpg')}")
     since = time.time()
     trigger_sync()
-    wait_sync_done("phone deleted a photo (delete off)", None, since)
-    check("PC keeps the file deleted on the phone (delete off)", (CAMERA_PC / "IMG_0001.jpg").is_file())
+    wait_sync_done("phone deleted a photo", None, since)
+    check("PC keeps the file deleted on the phone", (CAMERA_PC / "IMG_0001.jpg").is_file())
 
     pc_command(f"set-delete|{CAMERA_PC.name}|true")
+    st_folder = next((f for f in status().get("folders") or [] if f.get("name") == CAMERA_PC.name), {})
+    check("Phone -> PC folder cannot be switched to deleting", not st_folder.get("deleteMissing"), st_folder)
     sh(f"rm {q(CAMERA_PHONE + '/IMG_0002.jpg')}")
     since = time.time()
     trigger_sync()
-    wait_sync_done("phone deleted a photo (delete on)", None, since)
-    check("PC deletes the file deleted on the phone (delete on)", not (CAMERA_PC / "IMG_0002.jpg").exists())
-    check("Earlier kept file stays on the PC", (CAMERA_PC / "IMG_0001.jpg").is_file())
+    wait_sync_done("phone deleted another photo", None, since)
+    check("PC still keeps both files deleted on the phone", (CAMERA_PC / "IMG_0001.jpg").is_file() and (CAMERA_PC / "IMG_0002.jpg").is_file())
+
+    # A file changed on the phone never overwrites the PC copy: it arrives next to it.
+    original = md5(CAMERA_PC / "2026/Квітень/IMG_0100.jpg")
+    edited = WORK / "edited.jpg"
+    write_file(edited, 77_777, seed="edited-on-phone")
+    adb("push", str(edited), CAMERA_PHONE + "/2026/Квітень/IMG_0100.jpg", timeout=120)
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("photo edited on the phone", None, since)
+    copy = CAMERA_PC / "2026/Квітень/IMG_0100 (з телефона).jpg"
+    check("PC copy is not overwritten by the edited phone file", md5(CAMERA_PC / "2026/Квітень/IMG_0100.jpg") == original)
+    check("Edited phone file saved next to it as a copy", copy.is_file() and md5(copy) == md5(edited),
+          sorted(p.name for p in (CAMERA_PC / "2026/Квітень").iterdir()))
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("photo edited on the phone, again", None, since)
+    copies = [p.name for p in (CAMERA_PC / "2026/Квітень").iterdir() if "з телефона" in p.name]
+    check("Repeated syncs do not make more copies", len(copies) == 1, copies)
 
     # Resume of an interrupted upload.
     big = WORK / "big-upload.mp4"

@@ -13,8 +13,8 @@ import kotlinx.serialization.json.Json
  *  - Folders: the PC shares several folders ([FolderInfo]); each one is synced either
  *    PC → phone ([Direction.TO_PHONE]) or phone → PC ([Direction.TO_PC]).
  *  - PC → phone: the phone pulls the [Manifest] and downloads files (HTTP Range for resume).
- *  - Phone → PC: the phone uploads files (PUT with an offset for resume) and may ask the PC
- *    to delete files it uploaded earlier.
+ *  - Phone → PC: the phone uploads files (PUT with an offset for resume). Nothing on the PC is
+ *    ever deleted or overwritten: a different file under a taken name is saved as a copy.
  *  - The phone reports [SyncProgress] back so the PC can show it.
  */
 object Protocol {
@@ -104,7 +104,7 @@ data class FolderInfo(
     val id: String,
     val name: String,
     val direction: Direction = Direction.TO_PHONE,
-    /** Delete files on the receiving side when they disappear on the sending side. */
+    /** PC → phone only: delete files on the phone when they disappear on the PC. Always false for phone → PC. */
     val deleteMissing: Boolean = true,
     /** Files currently in the folder on the PC. */
     val files: Int = 0,

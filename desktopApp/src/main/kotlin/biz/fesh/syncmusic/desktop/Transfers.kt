@@ -5,9 +5,7 @@ import kotlinx.coroutines.sync.Mutex
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -19,7 +17,12 @@ sealed interface UploadOutcome {
     data class Rejected(val message: String) : UploadOutcome
 }
 
-/** Receiving files from the phone (phone → PC folders) and deleting them on request. */
+/**
+ * Receiving files from the phone (phone → PC folders).
+ *
+ * Rule: nothing that is already on the PC is ever deleted or overwritten. A file that arrives
+ * under a name that is taken by a different file is saved next to it as "name (з телефона).ext".
+ */
 object Transfers {
     private const val RESERVE_BYTES = 50L * 1024 * 1024
     private val locks = ConcurrentHashMap<String, Mutex>()
@@ -81,12 +84,15 @@ object Transfers {
         return when {
             length == size -> {
                 target.parentFile?.mkdirs()
-                try {
-                    Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-                } catch (_: AtomicMoveNotSupportedException) {
-                    Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                val dest = destinationFor(target, part)
+                if (dest == null) {
+                    part.delete() // the same file is already on the PC; only our temporary copy goes
+                } else {
+                    // No REPLACE_EXISTING: if the name got taken meanwhile the move fails instead of overwriting.
+                    Files.move(part.toPath(), dest.toPath())
+                    if (modified > 0) dest.setLastModified(modified)
+                    if (dest != target) AppLog.i("Kept the existing $relative, saved the phone's version as ${dest.name}")
                 }
-                if (modified > 0) target.setLastModified(modified)
                 UploadOutcome.Done
             }
             length > size -> {
@@ -98,20 +104,39 @@ object Transfers {
     }
 
     /**
-     * Deletes a file the phone uploaded earlier. [expectedSize] protects files changed on the PC
-     * in the meantime: they are left alone. Returns false when the file was kept.
+     * Where a fully received file goes without touching anything on the PC:
+     * the target itself when the name is free, null when an identical file is already there
+     * (under the name or as an earlier "(з телефона)" copy), otherwise the first free copy name.
      */
-    fun delete(root: File, relative: String, expectedSize: Long?): Boolean {
-        val file = resolve(root, relative) ?: return false
-        if (!file.isFile) return true
-        if (expectedSize != null && file.length() != expectedSize) return false
-        if (!file.delete()) return false
-        var dir = file.parentFile
-        val rootPath = root.canonicalPath
-        while (dir != null && dir.canonicalPath != rootPath && dir.canonicalPath.startsWith(rootPath)) {
-            if (!dir.delete()) break // fails when not empty
-            dir = dir.parentFile
+    private fun destinationFor(target: File, received: File): File? {
+        if (!target.exists()) return target
+        if (sameContent(target, received)) return null
+        val dot = target.name.lastIndexOf('.')
+        val base = if (dot > 0) target.name.substring(0, dot) else target.name
+        val ext = if (dot > 0) target.name.substring(dot) else ""
+        var n = 1
+        while (true) {
+            val label = if (n == 1) "з телефона" else "з телефона $n"
+            val candidate = File(target.parentFile, "$base ($label)$ext")
+            if (!candidate.exists()) return candidate
+            if (sameContent(candidate, received)) return null
+            n++
         }
-        return true
+    }
+
+    private fun sameContent(a: File, b: File): Boolean {
+        if (!a.isFile || !b.isFile || a.length() != b.length()) return false
+        a.inputStream().buffered(256 * 1024).use { x ->
+            b.inputStream().buffered(256 * 1024).use { y ->
+                val bx = ByteArray(64 * 1024)
+                val by = ByteArray(64 * 1024)
+                while (true) {
+                    val nx = x.readNBytes(bx, 0, bx.size)
+                    val ny = y.readNBytes(by, 0, by.size)
+                    if (nx != ny || !java.util.Arrays.equals(bx, 0, nx, by, 0, ny)) return false
+                    if (nx == 0) return true
+                }
+            }
+        }
     }
 }

@@ -131,7 +131,6 @@ private class UpPlan(
     val root: File,
     val db: SyncedDb,
     val uploads: List<LocalFile>,
-    val remoteDeletes: List<Pair<String, SyncedRecord>>,
 )
 
 private class Session(
@@ -287,7 +286,6 @@ private class Session(
 
                     withContext(Dispatchers.IO) {
                         for (plan in downPlans) deleteLocal(plan)
-                        for (plan in upPlans) deleteRemote(api, plan)
                     }
 
                     for (plan in downPlans) {
@@ -538,7 +536,9 @@ private class Session(
             val record = db[file.path]
             val pc = onPc[file.path]
             val known = record != null && record.s == file.size && record.m == file.modified
-            if (pc != null && pc.size == file.size && (record == null || known)) {
+            // Already sent and unchanged on the phone: done, even if the PC copy was edited since.
+            // (The PC never overwrites its files; a changed phone file arrives as a separate copy.)
+            if (pc != null && (known || (record == null && pc.size == file.size))) {
                 if (record == null) db.put(file.path, SyncedRecord(file.size, file.modified))
                 okFiles++
                 okBytes += file.size
@@ -552,34 +552,12 @@ private class Session(
         state.syncedBytes = okBytes
         if (badNames > 0) state.message = "Пропущено ${badNames} файлів з назвами, недопустимими у Windows"
 
+        // Files deleted on the phone stay on the PC: nothing is ever deleted there.
         val localPaths = local.mapTo(HashSet()) { it.path }
-        val gone = db.paths.filter { it !in localPaths }
-        val remoteDeletes = when {
-            gone.isEmpty() -> emptyList()
-            local.isEmpty() -> {
-                // Safety net: an empty (or unreadable) phone folder never empties the PC.
-                state.message = "Папка на телефоні порожня — видалення на ПК пропущено"
-                emptyList()
-            }
-            state.info.deleteMissing -> gone.mapNotNull { path -> db[path]?.let { path to it } }
-            else -> {
-                gone.forEach(db::remove)
-                emptyList()
-            }
-        }
+        db.paths.filter { it !in localPaths }.forEach(db::remove)
         uploads.sortBy { it.path.lowercase() }
-        Log.i(TAG, "${state.info.name}: ${uploads.size} to upload, ${remoteDeletes.size} to delete on the PC")
-        return UpPlan(state, root, db, uploads, remoteDeletes)
-    }
-
-    private fun deleteRemote(api: Api, plan: UpPlan) {
-        if (plan.remoteDeletes.isEmpty()) return
-        phase = SyncPhase.DELETING
-        for ((path, record) in plan.remoteDeletes) {
-            if (api.deleteRemote(plan.state.info.id, path, record.s)) deleted++
-            plan.db.remove(path)
-        }
-        plan.db.save()
+        Log.i(TAG, "${state.info.name}: ${uploads.size} to upload")
+        return UpPlan(state, root, db, uploads)
     }
 
     private suspend fun uploadAll(api: Api, plan: UpPlan) {

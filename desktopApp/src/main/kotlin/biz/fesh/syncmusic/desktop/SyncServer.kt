@@ -206,23 +206,12 @@ class SyncServer(private val app: AppController) {
                 }
             }
 
+            // Files on the PC are never deleted by the phone. Older phone versions may still ask:
+            // they get 403 and keep going (they treat it as "the PC kept the file").
             delete("/api/file") {
                 call.requireDevice() ?: return@delete
-                val runtime = call.receivingFolder() ?: return@delete
-                if (!runtime.folder.deleteMissing) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("Для цієї папки видалення вимкнене"))
-                    return@delete
-                }
-                val path = call.request.queryParameters["path"].orEmpty()
-                val size = call.request.queryParameters["size"]?.toLongOrNull()
-                val deleted = withContext(Dispatchers.IO) { Transfers.delete(File(runtime.folder.path), path, size) }
-                if (deleted) {
-                    runtime.library.invalidate()
-                    AppLog.i("Deleted $path in ${runtime.folder.name} (removed on the phone)")
-                    call.respond(HttpStatusCode.NoContent)
-                } else {
-                    call.respond(HttpStatusCode.Conflict, ErrorResponse("Файл на комп'ютері змінено, його залишено"))
-                }
+                AppLog.i("Refused to delete ${call.request.queryParameters["path"]} on the PC (deleting on the PC is disabled)")
+                call.respond(HttpStatusCode.Forbidden, ErrorResponse("Видалення файлів на комп'ютері вимкнене"))
             }
 
             post("/api/progress") {

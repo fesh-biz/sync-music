@@ -247,12 +247,21 @@ private fun FolderRow(folder: SyncFolder, controller: AppController, onRemove: (
                 color = if (stats.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(220.dp),
             )
-            Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
-            Text(
-                if (folder.direction == Direction.TO_PHONE) "Видаляти з телефона файли, видалені на ПК" else "Видаляти з ПК файли, видалені на телефоні",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
+            if (folder.direction == Direction.TO_PHONE) {
+                Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
+                Text(
+                    "Видаляти з телефона файли, видалені на ПК",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Text(
+                    "З комп'ютера нічого не видаляється",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                )
+            }
             TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
         }
     }

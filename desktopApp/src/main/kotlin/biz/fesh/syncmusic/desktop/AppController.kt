@@ -192,7 +192,8 @@ class AppController {
             id = folder.id,
             name = folder.name,
             direction = folder.direction,
-            deleteMissing = folder.deleteMissing,
+            // Phone → PC folders never delete anything on the PC.
+            deleteMissing = folder.direction == Direction.TO_PHONE && folder.deleteMissing,
             files = stats?.files ?: 0,
             bytes = stats?.bytes ?: 0,
             available = File(folder.path).isDirectory,
@@ -214,7 +215,7 @@ class AppController {
             name = name,
             path = canonical,
             direction = direction,
-            deleteMissing = deleteMissing ?: (direction == Direction.TO_PHONE),
+            deleteMissing = direction == Direction.TO_PHONE && (deleteMissing ?: true),
         )
         settings.update { it.copy(folders = it.folders + folder) }
         syncRuntimes()
@@ -243,8 +244,11 @@ class AppController {
         syncRuntimes()
     }
 
+    /** Only for PC → phone folders (deleting on the phone); nothing is ever deleted on the PC. */
     fun setDeleteMissing(id: String, value: Boolean) {
-        settings.update { s -> s.copy(folders = s.folders.map { if (it.id == id) it.copy(deleteMissing = value) else it }) }
+        settings.update { s ->
+            s.copy(folders = s.folders.map { if (it.id == id && it.direction == Direction.TO_PHONE) it.copy(deleteMissing = value) else it })
+        }
         syncRuntimes()
     }
 
