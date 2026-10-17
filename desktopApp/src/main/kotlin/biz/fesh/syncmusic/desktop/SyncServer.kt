@@ -72,10 +72,14 @@ class SyncServer(private val app: AppController) {
     }
 
     /** The phone -> PC folder named in ?folder=, or null after responding with an error. */
+    /** A folder the phone still knows but which was removed from the list on the PC. */
+    private suspend fun ApplicationCall.respondFolderRemoved() =
+        respond(HttpStatusCode.Gone, ErrorResponse("Папку прибрано на комп'ютері"))
+
     private suspend fun ApplicationCall.receivingFolder(): FolderRuntime? {
         val runtime = app.folderRuntime(request.queryParameters["folder"] ?: "")
         when {
-            runtime == null -> respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
+            runtime == null -> respondFolderRemoved()
             runtime.folder.direction != Direction.TO_PC ->
                 respond(HttpStatusCode.Forbidden, ErrorResponse("Папка «${runtime.folder.name}» не приймає файли з телефона"))
             !File(runtime.folder.path).isDirectory ->
@@ -134,9 +138,11 @@ class SyncServer(private val app: AppController) {
             // Without ?folder= (version 1 phones) the first PC -> phone folder is used.
             get("/api/manifest") {
                 call.requireDevice() ?: return@get
-                val runtime = app.folderRuntime(call.request.queryParameters["folder"])
+                val folderId = call.request.queryParameters["folder"]
+                val runtime = app.folderRuntime(folderId)
                 if (runtime == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
+                    if (folderId != null) call.respondFolderRemoved()
+                    else call.respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
                     return@get
                 }
                 if (!File(runtime.folder.path).isDirectory) {
@@ -149,7 +155,13 @@ class SyncServer(private val app: AppController) {
 
             get("/api/file") {
                 call.requireDevice() ?: return@get
-                val runtime = app.folderRuntime(call.request.queryParameters["folder"])
+                val folderId = call.request.queryParameters["folder"]
+                val runtime = app.folderRuntime(folderId)
+                if (runtime == null && folderId != null) {
+                    // Stops a sync that was running when the folder was removed (newer phones stop at once).
+                    call.respondFolderRemoved()
+                    return@get
+                }
                 val path = call.request.queryParameters["path"]
                 val file = if (runtime != null && path != null && runtime.folder.direction == Direction.TO_PHONE) {
                     runtime.library.fileFor(path)

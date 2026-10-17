@@ -11,6 +11,7 @@ import biz.fesh.syncmusic.data.PairedServer
 import biz.fesh.syncmusic.net.Api
 import biz.fesh.syncmusic.net.Discovery
 import biz.fesh.syncmusic.net.FileGoneException
+import biz.fesh.syncmusic.net.FolderRemovedException
 import biz.fesh.syncmusic.net.FolderUnavailableException
 import biz.fesh.syncmusic.net.Http
 import biz.fesh.syncmusic.net.StoppedException
@@ -102,6 +103,8 @@ private class FolderState(val info: FolderInfo, val mapping: FolderMapping, val 
     @Volatile var syncedFiles = 0
     @Volatile var syncedBytes = 0L
     @Volatile var message: String? = null
+    /** Removed from the list on the PC during this run: no longer synced or shown. */
+    @Volatile var removed = false
 
     fun progress() = FolderProgress(
         id = info.id,
@@ -158,7 +161,7 @@ private class Session(
     private fun elapsed() = System.currentTimeMillis() - startedAt
 
     private fun snapshot(): SyncProgress {
-        val list = states
+        val list = states.filter { !it.removed }
         val active = list.filter { it.mapping.enabled }
         return SyncProgress(
             phase = phase,
@@ -279,7 +282,7 @@ private class Session(
                                 }
                             }
                         } catch (e: FolderUnavailableException) {
-                            state.message = e.message
+                            folderFailed(state, e)
                         }
                     }
                     Log.i(TAG, "Compared ${states.size} folders after ${elapsed()} ms")
@@ -292,18 +295,27 @@ private class Session(
                         if (plan.downloads.isEmpty()) continue
                         foreground()
                         phase = SyncPhase.DOWNLOADING
-                        val stop = withContext(Dispatchers.IO) { downloadAll(api, plan) }
+                        val stop = try {
+                            withContext(Dispatchers.IO) { downloadAll(api, plan) }
+                        } catch (e: FolderUnavailableException) {
+                            folderFailed(plan.state, e)
+                            false
+                        }
                         if (stop) break
                     }
                     for (plan in upPlans) {
                         if (plan.uploads.isEmpty()) continue
                         foreground()
                         phase = SyncPhase.UPLOADING
-                        withContext(Dispatchers.IO) { uploadAll(api, plan) }
+                        try {
+                            withContext(Dispatchers.IO) { uploadAll(api, plan) }
+                        } catch (e: FolderUnavailableException) {
+                            folderFailed(plan.state, e)
+                        }
                     }
 
                     reporter.cancel()
-                    val problems = states.any { it.mapping.enabled && it.message != null && it.syncedFiles < it.totalFiles }
+                    val problems = states.any { !it.removed && it.mapping.enabled && it.message != null && it.syncedFiles < it.totalFiles }
                     val done = if (message != null || problems) SyncPhase.ERROR else SyncPhase.DONE
                     finish(api, done, message, Outcome.DONE)
                 } finally {
@@ -325,6 +337,18 @@ private class Session(
                 dbs.forEach { it.save() }
                 Storage.scan(ctx, scanBatch.toList())
             }
+        }
+    }
+
+    /** A folder stopped mid-run: removed from the list on the PC, or not reachable there. */
+    private fun folderFailed(state: FolderState, e: FolderUnavailableException) {
+        currentFile = null
+        currentBytes = 0
+        if (e is FolderRemovedException) {
+            state.removed = true
+            Log.i(TAG, "${state.info.name}: removed on the PC, stopped")
+        } else {
+            state.message = e.message
         }
     }
 
@@ -470,6 +494,8 @@ private class Session(
                     throw CancellationException("stopped")
                 } catch (e: UnauthorizedException) {
                     throw e
+                } catch (e: FolderUnavailableException) {
+                    throw e
                 } catch (e: IOException) {
                     attempt++
                     if (attempt >= 3 || isStopped()) throw e
@@ -592,6 +618,8 @@ private class Session(
                 } catch (e: StoppedException) {
                     throw CancellationException("stopped")
                 } catch (e: UnauthorizedException) {
+                    throw e
+                } catch (e: FolderUnavailableException) {
                     throw e
                 } catch (e: IOException) {
                     attempts++

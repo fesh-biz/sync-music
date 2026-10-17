@@ -36,7 +36,10 @@ class UnauthorizedException : IOException("Комп'ютер не впізнає
 class PairingException(message: String) : IOException(message)
 class FileGoneException(path: String) : IOException("Файл зник на комп'ютері: $path")
 class StoppedException : IOException("stopped")
-class FolderUnavailableException(message: String) : IOException(message)
+open class FolderUnavailableException(message: String) : IOException(message)
+
+/** The folder was removed from the list on the PC: stop syncing it right away. */
+class FolderRemovedException : FolderUnavailableException("Папку прибрано на комп'ютері")
 
 sealed interface UploadResult {
     data object Complete : UploadResult
@@ -163,6 +166,7 @@ class Api(
         val client = http.newBuilder().readTimeout(120, TimeUnit.SECONDS).build()
         val manifestUrl = url("api/manifest").addQueryParameter("folder", folderId).build()
         return client.newCall(request(manifestUrl).build()).execute().use { r ->
+            if (r.code == 410) throw FolderRemovedException()
             if (r.code == 503 || r.code == 404) throw FolderUnavailableException(r.errorText())
             r.check()
             r.parse(Manifest.serializer())
@@ -176,6 +180,8 @@ class Api(
             .addQueryParameter("size", size.toString())
             .build()
         return http.newCall(request(offsetUrl).build()).execute().use { r ->
+            if (r.code == 410) throw FolderRemovedException()
+            if (r.code == 403 || r.code == 404 || r.code == 503) throw FolderUnavailableException(r.errorText())
             r.check()
             r.parse(UploadOffset.serializer()).offset
         }
@@ -235,6 +241,7 @@ class Api(
                 409 -> UploadResult.Conflict(r.parse(UploadOffset.serializer()).offset)
                 507 -> UploadResult.NoSpace
                 400 -> UploadResult.Rejected(r.errorText())
+                410 -> throw FolderRemovedException()
                 403, 404, 503 -> throw FolderUnavailableException(r.errorText())
                 else -> throw IOException("HTTP ${r.code}")
             }
@@ -269,6 +276,7 @@ class Api(
                 200 -> existing = 0
                 206 -> Unit
                 401 -> throw UnauthorizedException()
+                410 -> throw FolderRemovedException()
                 404 -> throw FileGoneException(entry.path)
                 416 -> {
                     part.delete()

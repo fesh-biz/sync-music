@@ -838,6 +838,48 @@ def scenario_sd_card():
     shot("13-on-sd-card")
 
 
+def scenario_remove_folder():
+    """A folder removed on the PC while the phone is downloading it: the phone stops at once."""
+    big = WORK / "removeme"
+    n = 300
+    for i in range(n):
+        write_file(big / f"{i:03d} track.flac", 2 * 1024 * 1024, seed=f"rm{i}")
+    pc_command(f"add-folder|{big}|TO_PHONE")
+    since = time.time()
+    trigger_sync()
+    t0 = time.time()
+    seen = False
+    while time.time() - t0 < 120:
+        if (device_progress().get("currentFile") or "").startswith(big.name + "/"):
+            seen = True
+            break
+        time.sleep(0.3)
+    check("Phone started downloading the new folder", seen)
+    pc_command(f"remove-folder|{big.name}")
+    removed_at = time.time()
+    stopped = None
+    while time.time() - removed_at < 60:
+        p = device_progress()
+        names = [f.get("name") for f in p.get("folders") or []]
+        if p.get("timestamp", 0) / 1000 >= removed_at and big.name not in names and p.get("phase") in ("DONE", "ERROR", "STOPPED"):
+            stopped = p
+            break
+        time.sleep(0.5)
+    took = time.time() - removed_at
+    timing("Phone stops after the folder was removed on the PC", f"{took:.1f} s")
+    check("Phone stops syncing a folder removed on the PC", stopped is not None and took < 30,
+          f"after {took:.1f} s: phase={(stopped or device_progress()).get('phase')} "
+          f"downloaded={(stopped or device_progress()).get('downloadedThisRun')} of {n}")
+    check("Removed folder ends without an error", stopped is not None and stopped.get("phase") == "DONE",
+          (stopped or {}).get("message"))
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("next sync after removing a folder", None, since)
+    names = [f.get("name") for f in device_progress().get("folders") or []]
+    check("Removed folder is no longer synced", big.name not in names, names)
+    shutil.rmtree(big)
+
+
 def scenario_revoke():
     pc_command("remove-devices")
     trigger_sync()
@@ -856,7 +898,7 @@ def main():
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
                          scenario_camera, scenario_docs, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
-                         scenario_revoke):
+                         scenario_remove_folder, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:
                 check(f"{scenario.__name__} not run: e2e time budget used up", False)
                 continue
