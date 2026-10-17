@@ -98,6 +98,9 @@ fun main(args: Array<String>) {
         LaunchedEffect(visible) {
             if (visible) controller.onWindowShown()
         }
+        LaunchedEffect(Unit) {
+            controller.hideWindow.collect { visible = false }
+        }
 
         val windowState = rememberWindowState(width = 1040.dp, height = 800.dp, position = WindowPosition(Alignment.Center))
 
@@ -160,6 +163,11 @@ private fun mirrorStatus(controller: AppController) {
                     "remove-devices" -> controller.settings.value.devices.forEach { controller.removeDevice(it.id) }
                     "rescan" -> controller.rescan()
                     "show" -> controller.requestShowWindow()
+                    "hide" -> controller.requestHideWindow()
+                    "quit" -> {
+                        controller.shutdown()
+                        exitProcess(0)
+                    }
                 }
             }
             val stats = controller.library.stats.value

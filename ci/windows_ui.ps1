@@ -52,8 +52,10 @@ function CountLog($pattern) {
 }
 
 # 1. First launch (no CDS archive yet)
-$p = Start-Process $exe -PassThru
+$sw0 = [Diagnostics.Stopwatch]::StartNew()
+$p = Start-Process $exe -ArgumentList '--status' -PassThru
 WaitLog 'Window composed' 60 | Out-Null
+"First launch: window composed after $([int]$sw0.Elapsed.TotalMilliseconds) ms (wall clock)" | Out-File -Append (Join-Path $out 'win-notes.txt')
 Start-Sleep 6
 Shot 'win-1-first-launch'
 
@@ -64,36 +66,36 @@ WaitLog 'Scanned 38 files' 20 | Out-Null
 Start-Sleep 2
 Shot 'win-2-after-delete'
 
-# 3. Minimize, then launch again: the running copy must come to the front
-Add-Type @"
-using System; using System.Runtime.InteropServices;
-public class W { [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c); }
-"@
-[W]::ShowWindow($p.MainWindowHandle, 6) | Out-Null   # SW_MINIMIZE
-Start-Sleep 2
-$sw = [Diagnostics.Stopwatch]::StartNew()
-$before = CountLog 'Showing window on request'
-Start-Process $exe | Out-Null
-$shown = $false
-while ($sw.Elapsed.TotalSeconds -lt 30) {
-    if ((CountLog 'Second launch') -ge 1) { $shown = $true; break }
-    Start-Sleep -Milliseconds 100
-}
+# 3. "Close" to the tray, then launch again: the running copy must show its window
+'hide' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
 Start-Sleep 3
-"Second launch handled after $([int]$sw.Elapsed.TotalMilliseconds) ms (log seen: $shown)" | Out-File -Append (Join-Path $out 'win-notes.txt')
-Shot 'win-3-second-launch'
+Shot 'win-3a-hidden'
+$sw = [Diagnostics.Stopwatch]::StartNew()
+Start-Process $exe -ArgumentList '--status' | Out-Null
+$before = 0
+while ($sw.Elapsed.TotalSeconds -lt 30) {
+    if ((CountLog 'Showing window on request') -ge 1) { break }
+    Start-Sleep -Milliseconds 50
+}
+"Reopen from the tray via a second launch: window shown after $([int]$sw.Elapsed.TotalMilliseconds) ms" | Out-File -Append (Join-Path $out 'win-notes.txt')
+Start-Sleep 2
+Shot 'win-3b-reopened'
 
-# 4. Close normally (writes the CDS archive), then launch again
-$p.CloseMainWindow() | Out-Null
-if (-not $p.WaitForExit(20000)) { "app did not exit on close" | Out-File -Append (Join-Path $out 'win-notes.txt'); Stop-Process -Id $p.Id -Force }
+# 4. Quit normally (the JVM writes its class-data archive on exit), then launch again
+'quit' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+if (-not $p.WaitForExit(30000)) { "app did not quit" | Out-File -Append (Join-Path $out 'win-notes.txt'); Stop-Process -Id $p.Id -Force }
 Get-ChildItem (Split-Path $exe) -Recurse -Filter *.jsa | ForEach-Object { "CDS archive: $($_.FullName) $($_.Length) bytes" } | Out-File -Append (Join-Path $out 'win-notes.txt')
 
-$p = Start-Process $exe -PassThru
-WaitLog 'Core started' 60 | Out-Null
-Start-Sleep 8
-Shot 'win-4-relaunch'
-$p.CloseMainWindow() | Out-Null
-$p.WaitForExit(20000) | Out-Null
+foreach ($i in 1..2) {
+    $p = Start-Process $exe -ArgumentList '--status' -PassThru
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt 60 -and (CountLog 'Window composed') -lt (1 + $i)) { Start-Sleep -Milliseconds 50 }
+    "Relaunch ${i}: window composed after $([int]$sw.Elapsed.TotalMilliseconds) ms (wall clock)" | Out-File -Append (Join-Path $out 'win-notes.txt')
+    Start-Sleep 4
+    Shot "win-4-relaunch-$i"
+    'quit' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+    if (-not $p.WaitForExit(30000)) { Stop-Process -Id $p.Id -Force }
+}
 
 Copy-Item (Join-Path $data 'syncmusic.log') (Join-Path $out 'win-syncmusic.log') -ErrorAction SilentlyContinue
 Get-ChildItem $out | Format-Table Name, Length | Out-String | Write-Host

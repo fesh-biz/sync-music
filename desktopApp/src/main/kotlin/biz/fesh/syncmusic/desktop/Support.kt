@@ -27,7 +27,7 @@ object AppPaths {
 /** Tiny file logger: %APPDATA%\SyncMusic\syncmusic.log (rotated at 1 MB). */
 object AppLog {
     private val file by lazy { File(AppPaths.dataDir, "syncmusic.log") }
-    private val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    private val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
 
     @Synchronized
     fun write(level: String, message: String, error: Throwable? = null) {
@@ -104,7 +104,12 @@ object NetUtil {
         }
         val real = all.filter { !it.second }.map { it.first }
         val list = real.ifEmpty { all.map { it.first } }
-        return list.sortedBy { addr ->
+        // The address the OS would use to reach the internet is the one phones on the home Wi-Fi can reach.
+        val primary = primaryAddress()
+        val primaryEntry = all.firstOrNull { it.first.address == primary }?.first
+        val candidates = if (primaryEntry != null && primaryEntry !in list) listOf(primaryEntry) + list else list
+        return candidates.sortedBy { addr ->
+            if (addr.address == primary) return@sortedBy -1
             when {
                 addr.address.startsWith("192.168.") -> 0
                 addr.address.startsWith("10.") -> 1
@@ -113,6 +118,16 @@ object NetUtil {
             }
         }
     }
+}
+
+/** Local address of the default route (no packets are sent: UDP "connect" only picks the interface). */
+private fun primaryAddress(): String? = try {
+    java.net.DatagramSocket().use { socket ->
+        socket.connect(java.net.InetAddress.getByName("8.8.8.8"), 53)
+        socket.localAddress?.takeIf { it is Inet4Address && !it.isAnyLocalAddress }?.hostAddress
+    }
+} catch (_: Throwable) {
+    null
 }
 
 /** The Android APK bundled into the PC app at build time, served at /app.apk. */

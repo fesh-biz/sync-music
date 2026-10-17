@@ -64,6 +64,10 @@ class AppController {
     private val _showWindow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val showWindow: SharedFlow<Unit> = _showWindow.asSharedFlow()
 
+    private val _hideWindow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Used by automated tests to simulate closing the window to the tray. */
+    val hideWindow: SharedFlow<Unit> = _hideWindow.asSharedFlow()
+
     val computerName: String by lazy {
         val env = System.getenv("COMPUTERNAME")?.takeIf { it.isNotBlank() }
         val host = if (env == null) {
@@ -153,6 +157,10 @@ class AppController {
 
     fun requestShowWindow() {
         _showWindow.tryEmit(Unit)
+    }
+
+    fun requestHideWindow() {
+        _hideWindow.tryEmit(Unit)
     }
 
     /** Called when the window becomes visible: make sure the numbers are current. */
