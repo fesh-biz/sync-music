@@ -391,7 +391,11 @@ def phone_files(root=PHONE_ROOT):
     for line in out.splitlines():
         parts = line.split("  ", 1)
         if len(parts) == 2 and parts[1].startswith("./"):
-            files[parts[1][2:]] = parts[0]
+            rel = parts[1][2:]
+            # Android itself creates hidden folders such as .thumbnails; the app does not sync them.
+            if any(part.startswith(".") for part in rel.split("/")[:-1]):
+                continue
+            files[rel] = parts[0]
     return files
 
 
