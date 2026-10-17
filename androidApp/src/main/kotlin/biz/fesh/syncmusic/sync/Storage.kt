@@ -9,29 +9,28 @@ import android.os.Environment
 import android.os.StatFs
 import android.os.storage.StorageManager
 import androidx.core.content.ContextCompat
+import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.Protocol
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import java.io.File
 
-/** A place on the phone where music can be kept: internal memory or an SD card. */
-data class StorageOption(
-    /** [Storage.PRIMARY] or the volume UUID (e.g. "1A2B-3C4D"). */
+/** A storage volume of the phone: internal memory or an SD card. */
+data class Volume(
     val id: String,
-    /** Name shown to the user, e.g. "Пам'ять телефона" or "SD-карта SanDisk". */
     val label: String,
-    /** Short form for messages and the PC screen. */
-    val shortLabel: String,
-    val musicRoot: File,
-    /** Path shown to the user, relative to the volume. */
-    val displayPath: String,
+    val root: File,
     val removable: Boolean,
-    /** Android 8–10: SD card is writable only inside the app's own folder, removed with the app. */
+    /** Android 8–10: the SD card is writable only inside the app's own folder (removed with the app). */
     val appPrivate: Boolean,
     val freeBytes: Long,
     val totalBytes: Long,
 )
+
+/** A file found in a phone folder that is sent to the PC. */
+data class LocalFile(val path: String, val file: File, val size: Long, val modified: Long)
 
 object Storage {
     const val FOLDER_NAME = "Sync Music"
@@ -44,75 +43,74 @@ object Storage {
             ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
 
-    /** All places available right now; internal memory always comes first. */
-    fun options(context: Context): List<StorageOption> {
-        val result = mutableListOf<StorageOption>()
+    @Suppress("DEPRECATION")
+    fun primaryRoot(): File = Environment.getExternalStorageDirectory()
 
-        @Suppress("DEPRECATION")
-        val primaryRoot = Environment.getExternalStorageDirectory()
-        result += StorageOption(
-            id = PRIMARY,
-            label = "Пам'ять телефона",
-            shortLabel = "пам'ять телефона",
-            musicRoot = File(primaryRoot, "${Environment.DIRECTORY_MUSIC}/$FOLDER_NAME"),
-            displayPath = "Music/$FOLDER_NAME",
-            removable = false,
-            appPrivate = false,
-            freeBytes = free(primaryRoot),
-            totalBytes = total(primaryRoot),
-        )
-
+    /** All volumes available right now; internal memory always comes first. */
+    fun volumes(context: Context): List<Volume> {
+        val result = mutableListOf<Volume>()
+        val primary = primaryRoot()
+        result += Volume(PRIMARY, "Пам'ять телефона", primary, false, false, free(primary), total(primary))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val sm = context.getSystemService(StorageManager::class.java)
                 for (volume in sm?.storageVolumes.orEmpty()) {
-                    if (volume.isPrimary) continue
-                    if (volume.state != Environment.MEDIA_MOUNTED) continue
+                    if (volume.isPrimary || volume.state != Environment.MEDIA_MOUNTED) continue
                     val dir = volume.directory ?: continue
                     val uuid = volume.uuid ?: continue
                     val description = try { volume.getDescription(context) } catch (_: Throwable) { null }
                     val kind = if (volume.isRemovable) "SD-карта" else "Додаткова пам'ять"
                     val label = if (description.isNullOrBlank() || description.equals(kind, ignoreCase = true)) kind else "$kind ($description)"
-                    result += StorageOption(
-                        id = uuid,
-                        label = label,
-                        shortLabel = kind,
-                        musicRoot = File(dir, "${Environment.DIRECTORY_MUSIC}/$FOLDER_NAME"),
-                        displayPath = "Music/$FOLDER_NAME",
-                        removable = volume.isRemovable,
-                        appPrivate = false,
-                        freeBytes = free(dir),
-                        totalBytes = total(dir),
-                    )
+                    result += Volume(uuid, label, dir, volume.isRemovable, false, free(dir), total(dir))
                 }
             } catch (_: Throwable) {
             }
         } else {
             // Before Android 11 an app may write to the SD card only inside its own folder there.
-            val dirs = try { context.getExternalFilesDirs(Environment.DIRECTORY_MUSIC) } catch (_: Throwable) { emptyArray() }
+            val dirs = try { context.getExternalFilesDirs(null) } catch (_: Throwable) { emptyArray() }
             for (dir in dirs.drop(1)) {
                 if (dir == null) continue
                 val mounted = try { Environment.getExternalStorageState(dir) == Environment.MEDIA_MOUNTED } catch (_: Throwable) { false }
                 if (!mounted) continue
-                val volumeName = dir.absolutePath.removePrefix("/storage/").substringBefore('/')
-                result += StorageOption(
-                    id = volumeName,
-                    label = "SD-карта",
-                    shortLabel = "SD-карта",
-                    musicRoot = File(dir, FOLDER_NAME),
-                    displayPath = "Android/data/${context.packageName}/files/Music/$FOLDER_NAME",
-                    removable = true,
-                    appPrivate = true,
-                    freeBytes = free(dir),
-                    totalBytes = total(dir),
-                )
+                val id = dir.absolutePath.removePrefix("/storage/").substringBefore('/')
+                result += Volume(id, "SD-карта (папка застосунку)", dir, true, true, free(dir), total(dir))
             }
         }
         return result
     }
 
-    /** The option with [id], or null if that card is not inserted right now. */
-    fun find(context: Context, id: String): StorageOption? = options(context).firstOrNull { it.id == id }
+    /** The volume that contains [path] (longest matching root). */
+    fun volumeOf(volumes: List<Volume>, path: String): Volume? =
+        volumes.filter { path == it.root.path || path.startsWith(it.root.path.trimEnd('/') + "/") }
+            .maxByOrNull { it.root.path.length }
+
+    /** "Пам'ять телефона › Music/Sync Music" */
+    fun describe(volumes: List<Volume>, path: String?): String? {
+        if (path == null) return null
+        val volume = volumeOf(volumes, path) ?: return path
+        val relative = path.removePrefix(volume.root.path).trim('/')
+        return if (relative.isEmpty()) volume.label else "${volume.label} › $relative"
+    }
+
+    /** Where version 1 kept the music for the old "Де зберігати музику" setting. */
+    fun legacyMusicRoot(context: Context, storageId: String): String {
+        if (storageId == PRIMARY) return File(primaryRoot(), "${Environment.DIRECTORY_MUSIC}/$FOLDER_NAME").path
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return "/storage/$storageId/${Environment.DIRECTORY_MUSIC}/$FOLDER_NAME"
+        val dirs = try { context.getExternalFilesDirs(Environment.DIRECTORY_MUSIC) } catch (_: Throwable) { emptyArray() }
+        val dir = dirs.filterNotNull().firstOrNull { it.path.startsWith("/storage/$storageId/") }
+        return File(dir ?: File("/storage/$storageId/Android/data/${context.packageName}/files/Music"), FOLDER_NAME).path
+    }
+
+    /** Suggested phone folder for a PC → phone folder that has no folder chosen yet. */
+    fun defaultFolderPath(context: Context, folder: FolderInfo, legacyStorageId: String, taken: Collection<String>): String {
+        if (folder.id == Protocol.LEGACY_FOLDER_ID) return legacyMusicRoot(context, legacyStorageId)
+        val safeName = folder.name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifEmpty { "Папка" }
+        val base = File(primaryRoot(), "$FOLDER_NAME/$safeName").path
+        var candidate = base
+        var n = 2
+        while (taken.any { it.equals(candidate, ignoreCase = true) }) candidate = "$base ($n)".also { n++ }
+        return candidate
+    }
 
     private fun free(dir: File): Long = try { StatFs(dir.path).availableBytes } catch (_: Throwable) { -1 }
     private fun total(dir: File): Long = try { StatFs(dir.path).totalBytes } catch (_: Throwable) { -1 }
@@ -139,16 +137,22 @@ object Storage {
         return File(root, parts.joinToString(File.separator))
     }
 
-    /** Removes empty folders between [file]'s parent and [root]. */
-    fun pruneEmptyParents(root: File, file: File) {
-        var dir = file.parentFile
-        val rootPath = root.absolutePath
-        while (dir != null && dir.absolutePath.startsWith(rootPath) && dir.absolutePath != rootPath) {
-            val children = dir.list()
-            if (children == null || children.isNotEmpty()) return
-            if (!dir.delete()) return
-            dir = dir.parentFile
+    /** All files under [root] that are sent to the PC (hidden files and system junk are skipped). */
+    fun listLocal(root: File): List<LocalFile> {
+        val out = ArrayList<LocalFile>()
+        fun walk(dir: File, prefix: String) {
+            val children = dir.listFiles() ?: return
+            for (child in children) {
+                val name = child.name
+                if (child.isDirectory) {
+                    if (Protocol.isSyncableDir(name)) walk(child, "$prefix$name/")
+                } else if (Protocol.isSyncable(name)) {
+                    out += LocalFile("$prefix$name", child, child.length(), child.lastModified())
+                }
+            }
         }
+        walk(root, "")
+        return out
     }
 
     /**
@@ -170,13 +174,9 @@ object Storage {
         }
     }
 
-    /**
-     * Deletes the music this app put into [option] (only files it downloaded itself)
-     * and forgets them. Returns the number of deleted files.
-     */
-    fun wipe(context: Context, serverId: String, option: StorageOption): Int {
-        val db = SyncedDb.load(context, serverId, option.id)
-        val root = option.musicRoot
+    /** Deletes the files this app downloaded into [db]'s folder and forgets them. Returns how many. */
+    fun wipe(context: Context, db: SyncedDb): Int {
+        val root = File(db.root)
         val removed = ArrayList<String>()
         val parents = HashSet<File>()
         for (path in db.paths) {
@@ -187,7 +187,7 @@ object Storage {
             }
         }
         pruneDirs(root, parents)
-        File(root, ".syncmusic").deleteRecursively()
+        File(root, Protocol.TEMP_DIR).deleteRecursively()
         if (root.isDirectory && root.list()?.isEmpty() == true) root.delete()
         db.clear()
         scan(context, removed)
@@ -198,13 +198,21 @@ object Storage {
 @Serializable
 data class SyncedRecord(val s: Long, val m: Long)
 
-/** Remembers which files this app put on the phone (path -> size/mtime as on the PC), per storage. */
-class SyncedDb private constructor(private val file: File, initial: Map<String, SyncedRecord>) {
+@Serializable
+private data class DbFile(val root: String, val files: Map<String, SyncedRecord>)
+
+/**
+ * Remembers which files were synced for one folder (path -> size/mtime): for PC → phone folders
+ * the files this app downloaded, for phone → PC folders the files it uploaded.
+ * The record is tied to the phone folder ([root]); choosing another folder starts from scratch.
+ */
+class SyncedDb private constructor(private val file: File, val root: String, initial: Map<String, SyncedRecord>) {
     private val map = HashMap(initial)
     private var dirty = false
 
     operator fun get(path: String): SyncedRecord? = map[path]
     val paths: Set<String> get() = map.keys.toSet()
+    val size: Int get() = map.size
 
     fun put(path: String, record: SyncedRecord) {
         map[path] = record
@@ -224,8 +232,9 @@ class SyncedDb private constructor(private val file: File, initial: Map<String, 
     fun save() {
         if (!dirty) return
         try {
+            file.parentFile?.mkdirs()
             val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(Protocol.json.encodeToString(serializer, map))
+            tmp.writeText(Protocol.json.encodeToString(DbFile.serializer(), DbFile(root, map)))
             if (!tmp.renameTo(file)) {
                 file.writeText(tmp.readText())
                 tmp.delete()
@@ -236,17 +245,41 @@ class SyncedDb private constructor(private val file: File, initial: Map<String, 
     }
 
     companion object {
-        private val serializer = MapSerializer(String.serializer(), SyncedRecord.serializer())
+        private val legacySerializer = MapSerializer(String.serializer(), SyncedRecord.serializer())
 
-        fun load(context: Context, serverId: String, storageId: String): SyncedDb {
-            val suffix = if (storageId == Storage.PRIMARY) "" else "-" + storageId.replace(Regex("[^A-Za-z0-9_-]"), "_")
-            val file = File(context.filesDir, "synced-$serverId$suffix.json")
-            val data = try {
-                if (file.isFile) Protocol.json.decodeFromString(serializer, file.readText()) else emptyMap()
-            } catch (_: Throwable) {
-                emptyMap()
+        private fun safe(text: String) = text.replace(Regex("[^A-Za-z0-9_-]"), "_")
+
+        fun load(
+            context: Context,
+            serverId: String,
+            folderId: String,
+            direction: Direction,
+            root: String,
+            legacyStorageId: String,
+        ): SyncedDb {
+            val file = File(context.filesDir, "sync/${safe(serverId)}/${safe(folderId)}-${direction.name}.json")
+            if (file.isFile) {
+                val stored = try {
+                    Protocol.json.decodeFromString(DbFile.serializer(), file.readText())
+                } catch (_: Throwable) {
+                    null
+                }
+                return SyncedDb(file, root, if (stored != null && stored.root == root) stored.files else emptyMap())
             }
-            return SyncedDb(file, data)
+            // Version 1 kept one list for the music folder: take it over so nothing is downloaded again.
+            if (folderId == Protocol.LEGACY_FOLDER_ID && direction == Direction.TO_PHONE &&
+                root == Storage.legacyMusicRoot(context, legacyStorageId)
+            ) {
+                val suffix = if (legacyStorageId == Storage.PRIMARY) "" else "-" + safe(legacyStorageId)
+                val legacy = File(context.filesDir, "synced-$serverId$suffix.json")
+                val data = try {
+                    if (legacy.isFile) Protocol.json.decodeFromString(legacySerializer, legacy.readText()) else emptyMap()
+                } catch (_: Throwable) {
+                    emptyMap()
+                }
+                return SyncedDb(file, root, data).also { if (data.isNotEmpty()) it.dirty = true }
+            }
+            return SyncedDb(file, root, emptyMap())
         }
     }
 }

@@ -26,6 +26,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import javax.imageio.ImageIO
 import java.lang.management.ManagementFactory
+import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.SyncProgress
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -159,9 +160,18 @@ private fun mirrorStatus(controller: AppController) {
                 val text = commands.readText().trim()
                 commands.delete()
                 AppLog.i("Test command: $text")
-                when (text) {
+                val parts = text.split('|')
+                fun folderByName(name: String) = controller.settings.value.folders.firstOrNull { it.name == name }
+                when (parts[0]) {
                     "remove-devices" -> controller.settings.value.devices.forEach { controller.removeDevice(it.id) }
                     "rescan" -> controller.rescan()
+                    // add-folder|<path>|TO_PHONE or TO_PC
+                    "add-folder" -> AppLog.i("add-folder: " + (controller.addFolder(parts[1], Direction.valueOf(parts[2])) ?: "ok"))
+                    // set-delete|<name>|true/false
+                    "set-delete" -> folderByName(parts[1])?.let { controller.setDeleteMissing(it.id, parts[2].toBoolean()) }
+                    // set-direction|<name>|TO_PHONE or TO_PC
+                    "set-direction" -> folderByName(parts[1])?.let { controller.setDirection(it.id, Direction.valueOf(parts[2])) }
+                    "remove-folder" -> folderByName(parts[1])?.let { controller.removeFolder(it.id) }
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()
                     "quit" -> {
@@ -170,13 +180,30 @@ private fun mirrorStatus(controller: AppController) {
                     }
                 }
             }
-            val stats = controller.library.stats.value
+            val infos = controller.folderInfos()
             val json = buildJsonObject {
                 put("pin", controller.pin.value)
                 put("server", controller.serverState.value.toString())
-                put("libraryFiles", stats.files)
-                put("libraryBytes", stats.bytes)
-                put("scannedAt", stats.scannedAt)
+                put("libraryFiles", infos.sumOf { it.files })
+                put("libraryBytes", infos.sumOf { it.bytes })
+                put(
+                    "folders",
+                    buildJsonArray {
+                        for (info in infos) {
+                            val folder = controller.runtime(info.id)?.folder
+                            add(
+                                buildJsonObject {
+                                    put("id", info.id)
+                                    put("name", info.name)
+                                    put("path", folder?.path)
+                                    put("direction", info.direction.name)
+                                    put("deleteMissing", info.deleteMissing)
+                                    put("files", info.files)
+                                },
+                            )
+                        }
+                    },
+                )
                 put("addresses", controller.addresses.value?.joinToString(",") { it.address } ?: "")
                 put(
                     "devices",

@@ -27,16 +27,26 @@ DATA = APPDATA / "SyncMusic"
 MUSIC = WORK / "music"
 APP_BIN = ROOT / "desktopApp/build/compose/binaries/main/app/SyncMusic/bin/SyncMusic"
 APK = ROOT / "apk/syncmusic.apk"
+OLD_APK = ROOT / "apk-old/syncmusic-old.apk"  # previous release, to test the upgrade path
+CAMERA_PC = WORK / "pc-camera"                 # phone -> PC folder on the PC
+CAMERA_PHONE = "/sdcard/DCIM/TestCam"
+DOCS = WORK / "docs"                           # second PC -> phone folder
+DOCS_PHONE = "/sdcard/Sync Music/docs"
 PKG = "biz.fesh.syncmusic"
 ACTIVITY = f"{PKG}/.ui.MainActivity"
 PHONE_ROOT = "/sdcard/Music/Sync Music"
 DISPLAY = ":99"
-SYNCABLE = {"mp3", "flac", "m4a", "ogg", "opus", "wav", "m3u", "m3u8", "lrc"}
+JUNK = {"thumbs.db", "desktop.ini", "ehthumbs.db"}
+
+
+def syncable(name: str) -> bool:
+    return bool(name) and not name.startswith(".") and not name.startswith("~$") and name.lower() not in JUNK
 
 results: list[tuple[str, str, str]] = []
 timings: list[tuple[str, str]] = []
 pc_proc = None
 xvfb_proc = None
+using_old = False
 
 
 # ----------------------------------------------------------------- reporting
@@ -213,6 +223,16 @@ def tap_text(text, timeout=30):
     n = wait_for(text, timeout)
     if n is None:
         return False
+    # Make sure the target is really on screen (a lazy list may report clipped nodes).
+    _, h = screen_size()
+    for _ in range(4):
+        _, y = center(n)
+        if int(h * 0.08) < y < int(h * 0.92):
+            break
+        swipe(up=y >= int(h * 0.92))
+        n = find(text)
+        if n is None:
+            return False
     tap(n)
     return True
 
@@ -273,12 +293,12 @@ def md5(path: Path):
     return hashlib.md5(path.read_bytes()).hexdigest()
 
 
-def expected_files():
+def expected_files(root: Path = MUSIC):
     files = {}
-    for p in MUSIC.rglob("*"):
-        if p.is_file() and not any(part.startswith(".") for part in p.relative_to(MUSIC).parts):
-            if p.suffix.lower().lstrip(".") in SYNCABLE:
-                files[p.relative_to(MUSIC).as_posix()] = p
+    for p in root.rglob("*"):
+        if p.is_file() and not any(part.startswith(".") for part in p.relative_to(root).parent.parts):
+            if syncable(p.name):
+                files[p.relative_to(root).as_posix()] = p
     return files
 
 
@@ -357,8 +377,8 @@ def phone_count(root=PHONE_ROOT):
     return int(out) if out.isdigit() else -1
 
 
-def verify_phone(label, root=PHONE_ROOT):
-    expected = expected_files()
+def verify_phone(label, root=PHONE_ROOT, pc_root: Path = MUSIC):
+    expected = expected_files(pc_root)
     actual = phone_files(root)
     want = {rel: md5(p) for rel, p in expected.items()}
     missing = sorted(set(want) - set(actual))
@@ -380,6 +400,7 @@ def trigger_sync():
 
 
 def wait_sync_done(label, expected_total, since, timeout=240):
+    """expected_total=None: only require that everything that should be synced was synced."""
     end = time.time() + timeout
     last = {}
     while time.time() < end:
@@ -389,7 +410,9 @@ def wait_sync_done(label, expected_total, since, timeout=240):
             break
         time.sleep(1)
     took = time.time() - since
-    ok = last.get("phase") == "DONE" and last.get("totalFiles") == expected_total and last.get("syncedFiles") == expected_total
+    totals_ok = last.get("syncedFiles") == last.get("totalFiles") if expected_total is None else \
+        last.get("totalFiles") == expected_total and last.get("syncedFiles") == expected_total
+    ok = last.get("phase") == "DONE" and totals_ok
     check(f"Sync finished: {label}", ok,
           f"phase={last.get('phase')} synced={last.get('syncedFiles')}/{last.get('totalFiles')} expected={expected_total} "
           f"downloaded={last.get('downloadedThisRun')} deleted={last.get('deletedThisRun')} msg={last.get('message')}")
@@ -403,8 +426,12 @@ def device_setup():
     adb("wait-for-device")
     sh("svc wifi enable")
     sh("settings put global window_animation_scale 0; settings put global transition_animation_scale 0; settings put global animator_duration_scale 0")
-    r = adb("install", "-r", "-g", str(APK))
-    check("APK installs", "Success" in r.stdout, r.stdout.strip()[-200:] + r.stderr.strip()[-200:])
+    global using_old
+    using_old = OLD_APK.is_file()
+    apk = OLD_APK if using_old else APK
+    r = adb("install", "-r", "-g", str(apk))
+    check("APK installs" + (" (previous release, to test the upgrade)" if using_old else ""), "Success" in r.stdout,
+          r.stdout.strip()[-200:] + r.stderr.strip()[-200:])
     sh(f"appops set --uid {PKG} MANAGE_EXTERNAL_STORAGE allow")
     sh(f"dumpsys deviceidle whitelist +{PKG}")
     print(sh("dumpsys connectivity | grep -i 'NetworkAgentInfo' | head -5"))
@@ -451,7 +478,130 @@ def scenario_initial(since):
     wait_sync_done("initial", len(expected), since)
     shot("05-initial-synced")
     verify_phone("initial sync")
-    check("Non-music files are not copied", phone_count() == len(expected))
+    if using_old:
+        scenario_upgrade()
+    phone = phone_files()
+    check("All file types are synced (covers, text files)", "notes.txt" in phone and any(k.endswith("cover.jpg") for k in phone))
+
+
+def scenario_upgrade():
+    r = adb("install", "-r", "-g", str(APK))
+    check("New version installs over the previous release", "Success" in r.stdout, r.stdout.strip()[-200:])
+    sh(f"appops set --uid {PKG} MANAGE_EXTERNAL_STORAGE allow")
+    since = time.time()
+    cold_start("after upgrade")
+    wait_sync_done("after upgrade", len(expected_files()), since)
+    p = device_progress()
+    check("Upgrade keeps the synced music (nothing downloaded again)", p.get("downloadedThisRun") == 0,
+          f"downloaded={p.get('downloadedThisRun')}")
+    verify_phone("after upgrade")
+    check("Folder list shown after upgrade", wait_for("Папки", 20) is not None)
+    shot("05b-after-upgrade")
+
+
+def pc_folder_files(name):
+    for folder in status().get("folders") or []:
+        if folder.get("name") == name:
+            return folder.get("files")
+    return None
+
+
+def pc_files(root: Path):
+    return {rel: md5(p) for rel, p in expected_files(root).items()}
+
+
+def scenario_camera():
+    """Phone -> PC folder: choose the phone folder, upload, the delete switch, resume."""
+    src = WORK / "cam-src"
+    names = ["IMG_0001.jpg", "IMG_0002.jpg", "Відео з відпустки.mp4", "2026/Квітень/IMG_0100.jpg", "2026/notes.txt"]
+    for i, name in enumerate(names):
+        write_file(src / name, 40_000 + i * 51_000)
+    r = adb("push", str(src), CAMERA_PHONE, timeout=600)
+    check("Test photos placed on the phone", phone_count(CAMERA_PHONE) == len(names), r.stdout.strip()[-120:])
+    CAMERA_PC.mkdir(parents=True, exist_ok=True)
+    pc_command(f"add-folder|{CAMERA_PC}|TO_PC")
+    check("PC added a phone -> PC folder", pc_folder_files(CAMERA_PC.name) is not None)
+
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("folder list with a new phone -> PC folder", None, since)
+    shot("15-camera-folder-offered")
+    check("Phone asks to choose a folder for it", tap_text("Вибрати папку", 30))
+    check("Folder picker opened", wait_for("Вибрати цю папку", 15, scroll=False) is not None)
+    shot("16-picker")
+    tap_text("DCIM", 20)
+    tap_text("TestCam", 20)
+    shot("17-picker-testcam")
+    since = time.time()
+    tap_text("Вибрати цю папку", 10)
+    wait_sync_done("phone -> PC upload", None, since, timeout=300)
+    want = {rel: md5(p) for rel, p in expected_files(src).items()}
+    got = pc_files(CAMERA_PC)
+    check("Phone files arrived on the PC", got == want, f"{len(got)}/{len(want)}")
+    shot("18-camera-uploaded")
+
+    # The delete switch is off by default for phone -> PC: the PC keeps a copy.
+    sh(f"rm {q(CAMERA_PHONE + '/IMG_0001.jpg')}")
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("phone deleted a photo (delete off)", None, since)
+    check("PC keeps the file deleted on the phone (delete off)", (CAMERA_PC / "IMG_0001.jpg").is_file())
+
+    pc_command(f"set-delete|{CAMERA_PC.name}|true")
+    sh(f"rm {q(CAMERA_PHONE + '/IMG_0002.jpg')}")
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("phone deleted a photo (delete on)", None, since)
+    check("PC deletes the file deleted on the phone (delete on)", not (CAMERA_PC / "IMG_0002.jpg").exists())
+    check("Earlier kept file stays on the PC", (CAMERA_PC / "IMG_0001.jpg").is_file())
+
+    # Resume of an interrupted upload.
+    big = WORK / "big-upload.mp4"
+    write_file(big, 200 * 1024 * 1024, seed="big-upload")
+    adb("push", str(big), CAMERA_PHONE + "/big.mp4", timeout=600)
+    since = time.time()
+    trigger_sync()
+    part_size = 0
+    t0 = time.time()
+    while time.time() - t0 < 180:
+        parts = list((CAMERA_PC / ".syncmusic").glob("*.part")) if (CAMERA_PC / ".syncmusic").is_dir() else []
+        if parts and parts[0].stat().st_size > 20 * 1024 * 1024:
+            part_size = parts[0].stat().st_size
+            break
+        time.sleep(0.3)
+    shot("19-big-upload")
+    if not part_size:
+        skip("Upload resume after interruption", "upload finished before it could be interrupted")
+        wait_sync_done("big upload", None, since, timeout=300)
+    else:
+        adb("shell", "am", "force-stop", PKG)
+        time.sleep(2)
+        check("PC keeps the partial upload", part_size > 0, f"{part_size // 1048576} MB of 200 MB")
+        since = time.time()
+        adb("shell", "am", "start", "-n", ACTIVITY)
+        wait_sync_done("big upload after resume", None, since, timeout=400)
+        log = (DATA / "syncmusic.log").read_text(encoding="utf-8", errors="replace")
+        check("Upload resumed from the interruption point", "Upload resume big.mp4 from" in log)
+    ok = (CAMERA_PC / "big.mp4").is_file() and md5(CAMERA_PC / "big.mp4") == md5(big)
+    check("Big file identical on the PC", ok)
+    sh(f"rm {q(CAMERA_PHONE + '/big.mp4')}")
+
+
+def scenario_docs():
+    """A second PC -> phone folder lands in the default place; hidden files and junk are skipped."""
+    write_file(DOCS / "Звіт за рік.pdf", 300_000)
+    write_file(DOCS / "notes" / "план.txt", 2_000)
+    write_file(DOCS / "Thumbs.db", 5_000)
+    write_file(DOCS / ".hidden", 100)
+    write_file(DOCS / "~$Звіт.docx", 160)
+    pc_command(f"add-folder|{DOCS}|TO_PHONE")
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("second PC -> phone folder", None, since)
+    verify_phone("second folder", root=DOCS_PHONE, pc_root=DOCS)
+    phone = phone_files(DOCS_PHONE)
+    check("Hidden files and system junk are not synced", not any(k in phone for k in ("Thumbs.db", ".hidden", "~$Звіт.docx")))
+    shot("20-docs-folder")
 
 
 def scenario_pc_delete():
@@ -560,18 +710,18 @@ def scenario_scale():
     shutil.move(str(scale), str(MUSIC / "_scale"))
     pc_command("rescan")
     t0 = time.time()
-    while time.time() - t0 < 60 and status().get("libraryFiles") != len(expected_files()):
+    while time.time() - t0 < 60 and pc_folder_files(MUSIC.name) != len(expected_files()):
         time.sleep(0.5)
     timing("PC rescan with ~28 000 files", f"{time.time() - t0:.1f} s")
     since = time.time()
     trigger_sync()
-    ok = wait_sync_done("28 000 files copied by cable (adopted, nothing downloaded)", len(expected_files()), since, timeout=900)
+    ok = wait_sync_done("28 000 files copied by cable (adopted, nothing downloaded)", None, since, timeout=900)
     p = device_progress()
     check("Cable-copied files were adopted, not downloaded", ok and p.get("downloadedThisRun") == 0, f"downloaded={p.get('downloadedThisRun')}")
     shot("09-scale-synced")
     since = time.time()
     trigger_sync()
-    wait_sync_done("28 000 files, nothing changed", len(expected_files()), since, timeout=600)
+    wait_sync_done("28 000 files, nothing changed", None, since, timeout=600)
     cold_start("with 28 000 synced files")
     shot("10-scale-cold-start")
 
@@ -582,7 +732,7 @@ def scenario_scale_cleanup():
     time.sleep(3)
     since = time.time()
     trigger_sync()
-    wait_sync_done("28 000 files deleted on PC", len(expected_files()), since, timeout=900)
+    wait_sync_done("28 000 files deleted on PC", None, since, timeout=900)
     check("Phone deleted the 28 000 files", phone_count() == len(expected_files()), f"{phone_count()} files left")
 
 
@@ -611,23 +761,29 @@ def scenario_sd_card():
     if not uuid:
         skip("SD card", "virtual SD card did not mount: " + sh("sm list-volumes all"))
         return
-    sd_root = f"/storage/{uuid}/Music/Sync Music"
+    sd_music = f"/storage/{uuid}/Music"
     cold_start("SD card inserted")
-    n = wait_for("SD-карта", 30)
-    check("SD card offered as storage", n is not None)
-    shot("11-storage-choice")
-    if n is None:
-        return
-    tap(n)
-    check("Storage change dialog", wait_for("Видалити", 10, scroll=False) is not None)
-    shot("12-storage-dialog")
+    time.sleep(3)
+    # The first "Змінити" belongs to the first folder (the music folder).
+    check("Change-folder button", tap_text("Змінити", 30))
+    check("Folder picker opened", wait_for("Вибрати цю папку", 15, scroll=False) is not None)
+    check("SD card offered in the picker", tap_text("SD-карта", 15))
+    shot("11-picker-sd")
+    tap_text("Нова папка", 10)
+    type_into(0, "Music")
+    tap_text("Створити", 10)
+    shot("12-picker-sd-music")
+    tap_text("Вибрати цю папку", 10)
+    check("Move dialog", wait_for("Перенести", 10, scroll=False) is not None)
+    shot("12b-move-dialog")
     since = time.time()
     tap_text("Видалити", 10)
-    wait_sync_done("moved to SD card", len(expected_files()), since, timeout=300)
-    verify_phone("on SD card", root=sd_root)
+    wait_sync_done("music moved to SD card", None, since, timeout=300)
+    verify_phone("on SD card", root=sd_music)
     check("Old copy in phone memory removed", phone_count() == 0, f"{phone_count()} files left in phone memory")
     p = device_progress()
-    check("PC sees where the phone stores music", p.get("storage") == "SD-карта", p.get("storage"))
+    music = next((f for f in p.get("folders") or [] if f.get("name") == MUSIC.name), {})
+    check("PC sees the phone folder on the SD card", "SD-карта" in (music.get("localPath") or ""), music.get("localPath"))
     shot("13-on-sd-card")
 
 
@@ -648,7 +804,8 @@ def main():
         since = pair()
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
-                         scenario_scale, scenario_scale_cleanup, scenario_sd_card, scenario_revoke):
+                         scenario_camera, scenario_docs, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
+                         scenario_revoke):
             try:
                 scenario()
             except Exception as e:  # noqa: BLE001

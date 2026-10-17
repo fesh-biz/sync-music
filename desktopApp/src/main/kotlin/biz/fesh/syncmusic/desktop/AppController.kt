@@ -1,6 +1,9 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.PairRequest
+import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.ServerInfo
 import biz.fesh.syncmusic.shared.SyncProgress
 import kotlinx.coroutines.CoroutineScope
@@ -37,10 +40,17 @@ sealed interface PairResult {
     data object WrongPin : PairResult
 }
 
+/** A synced folder with its scanner and change watcher. */
+class FolderRuntime(val folder: SyncFolder, val library: Library, val watcher: FolderWatcher)
+
 class AppController {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val settings = SettingsStore(File(AppPaths.dataDir, "settings.json"))
-    val library = Library()
+
+    private val runtimes = java.util.concurrent.ConcurrentHashMap<String, FolderRuntime>()
+    private val _runtimeVersion = MutableStateFlow(0)
+    /** Changes whenever folder scanners are created or removed (the UI re-reads them). */
+    val runtimeVersion: StateFlow<Int> = _runtimeVersion.asStateFlow()
 
     private val random = SecureRandom()
 
@@ -85,16 +95,10 @@ class AppController {
     private val server = SyncServer(this)
     private val discovery = DiscoveryResponder { serverInfo() }
     private val lastPersist = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    private val watcher = FolderWatcher(scope) {
-        AppLog.i("Music folder changed, rescanning")
-        library.rescan()
-    }
 
     fun start() {
         AppLog.i("Starting Sync Music ${BuildInfo.version}")
-        if (settings.value.musicFolder == null) {
-            AppPaths.defaultMusicFolder()?.let { folder -> settings.update { it.copy(musicFolder = folder) } }
-        }
+        migrateFolders()
         if (!settings.value.firstRunDone) {
             settings.update { it.copy(firstRunDone = true) }
             if (settings.value.autostart) scope.launch(Dispatchers.IO) { WindowsIntegration.setAutostart(true) }
@@ -102,9 +106,7 @@ class AppController {
             // Re-apply so the path stays correct after updates.
             scope.launch(Dispatchers.IO) { WindowsIntegration.setAutostart(true) }
         }
-        library.setRoot(settings.value.musicFolder)
-        watcher.watch(settings.value.musicFolder)
-        scope.launch { library.rescan() }
+        syncRuntimes()
         startServer()
         discovery.start()
         // Network adapters change rarely; enumerating them can be slow on Windows, so do it off the UI thread.
@@ -121,9 +123,135 @@ class AppController {
         scope.launch {
             while (true) {
                 delay(120_000)
-                library.rescan()
+                runtimes.values.forEach { it.library.rescan() }
             }
         }
+    }
+
+    // ---------- folders ----------
+
+    /** Version 1 synced one music folder; it becomes the first folder (same id, so phones keep their files). */
+    private fun migrateFolders() {
+        val current = settings.value
+        if (current.foldersInitialized) return
+        val path = current.musicFolder ?: AppPaths.defaultMusicFolder()
+        settings.update { s ->
+            val folders = if (s.folders.isEmpty() && path != null) {
+                listOf(SyncFolder(Protocol.LEGACY_FOLDER_ID, File(path).name.ifBlank { "Музика" }, path, Direction.TO_PHONE, true))
+            } else {
+                s.folders
+            }
+            s.copy(folders = folders, musicFolder = null, foldersInitialized = true)
+        }
+        AppLog.i("Folders: ${settings.value.folders.map { it.path }}")
+    }
+
+    /** Creates/removes scanners and watchers to match the folder list. */
+    @Synchronized
+    private fun syncRuntimes() {
+        val folders = settings.value.folders
+        val ids = folders.map { it.id }.toSet()
+        for ((id, runtime) in runtimes) {
+            if (id !in ids) {
+                runtime.watcher.stop()
+                runtimes.remove(id)
+            }
+        }
+        for (folder in folders) {
+            val existing = runtimes[folder.id]
+            if (existing != null && existing.folder.path == folder.path) {
+                runtimes[folder.id] = FolderRuntime(folder, existing.library, existing.watcher)
+                continue
+            }
+            existing?.watcher?.stop()
+            val library = Library()
+            library.setRoot(folder.path)
+            val watcher = FolderWatcher(scope) {
+                AppLog.i("Folder ${folder.name} changed, rescanning")
+                library.rescan()
+            }
+            watcher.watch(folder.path)
+            runtimes[folder.id] = FolderRuntime(folder, library, watcher)
+            scope.launch { library.rescan() }
+        }
+        _runtimeVersion.value++
+    }
+
+    fun runtime(id: String): FolderRuntime? = runtimes[id]
+
+    /** Folder by id; without an id (version 1 phones) the first PC → phone folder. */
+    fun folderRuntime(id: String?): FolderRuntime? {
+        if (id != null) return runtimes[id]
+        val folder = settings.value.folders.firstOrNull { it.direction == Direction.TO_PHONE } ?: return null
+        return runtimes[folder.id]
+    }
+
+    fun folderInfos(): List<FolderInfo> = settings.value.folders.map { folder ->
+        val stats = runtimes[folder.id]?.library?.stats?.value
+        FolderInfo(
+            id = folder.id,
+            name = folder.name,
+            direction = folder.direction,
+            deleteMissing = folder.deleteMissing,
+            files = stats?.files ?: 0,
+            bytes = stats?.bytes ?: 0,
+            available = File(folder.path).isDirectory,
+        )
+    }
+
+    /** Adds a PC folder (PC → phone by default). Returns an error text or null. */
+    fun addFolder(path: String, direction: Direction = Direction.TO_PHONE, deleteMissing: Boolean? = null): String? {
+        val dir = File(path)
+        if (!dir.isDirectory) return "Папку не знайдено"
+        val canonical = try { dir.canonicalPath } catch (_: Throwable) { dir.absolutePath }
+        if (settings.value.folders.any { sameFile(it.path, canonical) }) return "Ця папка вже синхронізується"
+        val baseName = dir.name.ifBlank { canonical }
+        var name = baseName
+        var n = 2
+        while (settings.value.folders.any { it.name.equals(name, ignoreCase = true) }) name = "$baseName (${n++})"
+        val folder = SyncFolder(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            path = canonical,
+            direction = direction,
+            deleteMissing = deleteMissing ?: (direction == Direction.TO_PHONE),
+        )
+        settings.update { it.copy(folders = it.folders + folder) }
+        syncRuntimes()
+        AppLog.i("Added folder $name ($canonical, $direction)")
+        return null
+    }
+
+    fun removeFolder(id: String) {
+        settings.update { s -> s.copy(folders = s.folders.filter { it.id != id }) }
+        syncRuntimes()
+    }
+
+    fun setDirection(id: String, direction: Direction) {
+        settings.update { s ->
+            s.copy(
+                folders = s.folders.map {
+                    if (it.id == id && it.direction != direction) {
+                        // Safe default for the new direction: mirror to the phone, keep everything on the PC.
+                        it.copy(direction = direction, deleteMissing = direction == Direction.TO_PHONE)
+                    } else {
+                        it
+                    }
+                },
+            )
+        }
+        syncRuntimes()
+    }
+
+    fun setDeleteMissing(id: String, value: Boolean) {
+        settings.update { s -> s.copy(folders = s.folders.map { if (it.id == id) it.copy(deleteMissing = value) else it }) }
+        syncRuntimes()
+    }
+
+    private fun sameFile(a: String, b: String): Boolean = try {
+        File(a).canonicalPath.equals(File(b).canonicalPath, ignoreCase = WindowsIntegration.isWindows)
+    } catch (_: Throwable) {
+        a == b
     }
 
     private fun startServer() {
@@ -142,7 +270,7 @@ class AppController {
     }
 
     fun shutdown() {
-        watcher.stop()
+        runtimes.values.forEach { it.watcher.stop() }
         discovery.stop()
         server.stop()
     }
@@ -165,20 +293,11 @@ class AppController {
 
     /** Called when the window becomes visible: make sure the numbers are current. */
     fun onWindowShown() {
-        scope.launch { library.refreshIfOlderThan(10_000) }
-    }
-
-    // ---------- library ----------
-
-    fun setMusicFolder(path: String) {
-        settings.update { it.copy(musicFolder = path) }
-        library.setRoot(path)
-        watcher.watch(path)
-        scope.launch { library.rescan() }
+        scope.launch { runtimes.values.forEach { it.library.refreshIfOlderThan(10_000) } }
     }
 
     fun rescan() {
-        scope.launch { library.rescan() }
+        scope.launch { runtimes.values.forEach { it.library.rescan() } }
     }
 
     // ---------- pairing ----------

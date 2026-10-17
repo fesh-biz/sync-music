@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncProgress
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,9 +23,24 @@ data class PairedDevice(
 )
 
 @Serializable
+data class SyncFolder(
+    val id: String,
+    val name: String,
+    /** Folder on the PC. */
+    val path: String,
+    val direction: Direction = Direction.TO_PHONE,
+    /** Delete on the receiving side what disappeared on the sending side. */
+    val deleteMissing: Boolean = true,
+)
+
+@Serializable
 data class Settings(
     val serverId: String = UUID.randomUUID().toString(),
+    /** Version 1 had a single music folder; migrated into [folders]. */
     val musicFolder: String? = null,
+    val folders: List<SyncFolder> = emptyList(),
+    /** Set once the folder list was created (from [musicFolder] or the user's Music folder). */
+    val foldersInitialized: Boolean = false,
     val port: Int = Protocol.HTTP_PORT,
     val devices: List<PairedDevice> = emptyList(),
     val autostart: Boolean = true,

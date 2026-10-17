@@ -181,6 +181,16 @@ jobs:
           name: apk
           path: apk
 
+      - name: Previous release APK (upgrade test)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p apk-old
+          gh release download --repo "${{ github.repository }}" --pattern '*.apk' --dir apk-old || true
+          f=$(ls apk-old/*.apk 2>/dev/null | head -1)
+          if [ -n "$f" ]; then mv "$f" apk-old/syncmusic-old.apk; fi
+          ls -la apk-old
+
       - name: Build the PC app (Linux)
         shell: bash
         run: |

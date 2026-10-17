@@ -1,10 +1,13 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.ErrorResponse
+import biz.fesh.syncmusic.shared.FolderList
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PairResponse
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncProgress
+import biz.fesh.syncmusic.shared.UploadOffset
 import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -23,12 +26,20 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
+import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
 import io.ktor.server.routing.routing
 import java.net.ServerSocket
 
@@ -58,6 +69,20 @@ class SyncServer(private val app: AppController) {
         }
         app.touchDevice(device.id)
         return device
+    }
+
+    /** The phone -> PC folder named in ?folder=, or null after responding with an error. */
+    private suspend fun ApplicationCall.receivingFolder(): FolderRuntime? {
+        val runtime = app.folderRuntime(request.queryParameters["folder"] ?: "")
+        when {
+            runtime == null -> respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
+            runtime.folder.direction != Direction.TO_PC ->
+                respond(HttpStatusCode.Forbidden, ErrorResponse("Папка «${runtime.folder.name}» не приймає файли з телефона"))
+            !File(runtime.folder.path).isDirectory ->
+                respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка «${runtime.folder.name}» на комп'ютері недоступна"))
+            else -> return runtime
+        }
+        return null
     }
 
     private fun Application.module() {
@@ -101,27 +126,103 @@ class SyncServer(private val app: AppController) {
                 }
             }
 
+            get("/api/folders") {
+                call.requireDevice() ?: return@get
+                call.respond(FolderList(app.folderInfos()))
+            }
+
+            // Without ?folder= (version 1 phones) the first PC -> phone folder is used.
             get("/api/manifest") {
                 call.requireDevice() ?: return@get
-                val folder = app.settings.value.musicFolder
-                if (folder == null || !java.io.File(folder).isDirectory) {
-                    // Never hand out an empty list because of a missing folder: the phone would delete everything.
-                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка з музикою на комп'ютері недоступна"))
+                val runtime = app.folderRuntime(call.request.queryParameters["folder"])
+                if (runtime == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
                     return@get
                 }
-                call.respond(app.library.manifest(app.settings.value.serverId))
+                if (!File(runtime.folder.path).isDirectory) {
+                    // Never hand out an empty list because of a missing folder: the phone would delete everything.
+                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка «${runtime.folder.name}» на комп'ютері недоступна"))
+                    return@get
+                }
+                call.respond(runtime.library.manifest(app.settings.value.serverId))
             }
 
             get("/api/file") {
                 call.requireDevice() ?: return@get
+                val runtime = app.folderRuntime(call.request.queryParameters["folder"])
                 val path = call.request.queryParameters["path"]
-                val file = path?.let { app.library.fileFor(it) }
+                val file = if (runtime != null && path != null && runtime.folder.direction == Direction.TO_PHONE) {
+                    runtime.library.fileFor(path)
+                } else {
+                    null
+                }
                 if (file == null || !file.isFile) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("not found"))
                     return@get
                 }
                 call.request.headers[HttpHeaders.Range]?.let { range -> AppLog.i("Resume $path from $range") }
                 call.respond(LocalFileContent(file, ContentType.Application.OctetStream))
+            }
+
+            get("/api/upload/offset") {
+                call.requireDevice() ?: return@get
+                val runtime = call.receivingFolder() ?: return@get
+                val path = call.request.queryParameters["path"].orEmpty()
+                val size = call.request.queryParameters["size"]?.toLongOrNull() ?: 0L
+                val offset = withContext(Dispatchers.IO) { Transfers.offset(File(runtime.folder.path), path, size) }
+                call.respond(UploadOffset(offset))
+            }
+
+            put("/api/upload") {
+                call.requireDevice() ?: return@put
+                val runtime = call.receivingFolder() ?: return@put
+                val params = call.request.queryParameters
+                val path = params["path"].orEmpty()
+                val size = params["size"]?.toLongOrNull()
+                val modified = params["modified"]?.toLongOrNull() ?: 0L
+                val offset = params["offset"]?.toLongOrNull() ?: 0L
+                if (size == null || size < 0 || offset < 0 || offset > size) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("bad parameters"))
+                    return@put
+                }
+                if (offset > 0) AppLog.i("Upload resume $path from $offset")
+                val root = File(runtime.folder.path)
+                val outcome = Transfers.lockFor(runtime.folder.id + "/" + path).withLock {
+                    withContext(Dispatchers.IO) {
+                        call.receiveChannel().toInputStream().use { input ->
+                            Transfers.receive(root, path, size, modified, offset, input)
+                        }
+                    }
+                }
+                when (outcome) {
+                    UploadOutcome.Done -> {
+                        runtime.library.invalidate()
+                        call.respond(UploadOffset(size, complete = true))
+                    }
+                    is UploadOutcome.Partial -> call.respond(UploadOffset(outcome.received))
+                    is UploadOutcome.Conflict -> call.respond(HttpStatusCode.Conflict, UploadOffset(outcome.have))
+                    UploadOutcome.NoSpace -> call.respond(HttpStatusCode.InsufficientStorage, ErrorResponse("На комп'ютері недостатньо місця"))
+                    is UploadOutcome.Rejected -> call.respond(HttpStatusCode.BadRequest, ErrorResponse(outcome.message))
+                }
+            }
+
+            delete("/api/file") {
+                call.requireDevice() ?: return@delete
+                val runtime = call.receivingFolder() ?: return@delete
+                if (!runtime.folder.deleteMissing) {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("Для цієї папки видалення вимкнене"))
+                    return@delete
+                }
+                val path = call.request.queryParameters["path"].orEmpty()
+                val size = call.request.queryParameters["size"]?.toLongOrNull()
+                val deleted = withContext(Dispatchers.IO) { Transfers.delete(File(runtime.folder.path), path, size) }
+                if (deleted) {
+                    runtime.library.invalidate()
+                    AppLog.i("Deleted $path in ${runtime.folder.name} (removed on the phone)")
+                    call.respond(HttpStatusCode.NoContent)
+                } else {
+                    call.respond(HttpStatusCode.Conflict, ErrorResponse("Файл на комп'ютері змінено, його залишено"))
+                }
             }
 
             post("/api/progress") {

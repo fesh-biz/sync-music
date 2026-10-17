@@ -1,6 +1,7 @@
 package biz.fesh.syncmusic.desktop.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -55,7 +57,10 @@ import biz.fesh.syncmusic.desktop.NetUtil
 import biz.fesh.syncmusic.desktop.PairedDevice
 import biz.fesh.syncmusic.desktop.ServerState
 import biz.fesh.syncmusic.desktop.Settings
+import biz.fesh.syncmusic.desktop.SyncFolder
+import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.desktop.WindowsIntegration
+import biz.fesh.syncmusic.shared.FolderProgress
 import biz.fesh.syncmusic.shared.Format
 import biz.fesh.syncmusic.shared.SyncPhase
 import biz.fesh.syncmusic.shared.SyncProgress
@@ -67,7 +72,7 @@ import javax.swing.JFileChooser
 @Composable
 fun App(controller: AppController) {
     val settings by controller.settings.state.collectAsState()
-    val stats by controller.library.stats.collectAsState()
+    val runtimeVersion by controller.runtimeVersion.collectAsState()
     val pin by controller.pin.collectAsState()
     val live by controller.live.collectAsState()
     val serverState by controller.serverState.collectAsState()
@@ -84,11 +89,14 @@ fun App(controller: AppController) {
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 Header(serverState, addresses, addressesLoading, settings.port)
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    LibraryCard(Modifier.weight(1f), stats, settings, controller)
-                    ConnectCard(Modifier.weight(1.25f), pin, addresses, addressesLoading, settings.port, controller)
+                FoldersCard(settings, runtimeVersion, controller)
+                if (settings.devices.isEmpty()) {
+                    ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
+                    DevicesSection(settings, live, controller)
+                } else {
+                    DevicesSection(settings, live, controller)
+                    ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
                 }
-                DevicesSection(settings, live, controller)
                 SettingsCard(settings, controller)
                 Text(
                     "Sync Music ${BuildInfo.version}",
@@ -106,7 +114,7 @@ private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddres
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Синхронізація музики з телефоном через Wi-Fi",
+                "Синхронізація файлів між комп'ютером і телефоном через Wi-Fi",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -166,37 +174,111 @@ private fun Muted(text: String, maxLines: Int = Int.MAX_VALUE) {
     )
 }
 
-// ---------------------------------------------------------------- library
+// ---------------------------------------------------------------- folders
 
 @Composable
-private fun LibraryCard(modifier: Modifier, stats: LibraryStats, settings: Settings, controller: AppController) {
-    SectionCard(modifier) {
-        CardTitle("Музика на комп'ютері")
-        Muted(settings.musicFolder ?: "Папку не вибрано", maxLines = 2)
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(Format.files(stats.files), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(10.dp))
-            Text(Format.bytes(stats.bytes), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (stats.scanning) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Muted("Сканування папки…")
+private fun FoldersCard(settings: Settings, runtimeVersion: Int, controller: AppController) {
+    var error by remember { mutableStateOf<String?>(null) }
+    var removing by remember { mutableStateOf<SyncFolder?>(null) }
+    SectionCard(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                CardTitle("Папки для синхронізації")
+                Muted("Синхронізуються всі файли зі збереженням структури папок. Папку на телефоні для кожної з них вибирають у застосунку.")
             }
-        } else if (stats.scannedAt > 0) {
-            Muted("Перевірено ${Format.moment(stats.scannedAt)}")
-        }
-        stats.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-        Spacer(Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = {
-                chooseFolder(settings.musicFolder)?.let(controller::setMusicFolder)
-            }) { Text("Вибрати папку") }
+            Spacer(Modifier.width(12.dp))
             OutlinedButton(onClick = controller::rescan) { Text("Оновити") }
+            Spacer(Modifier.width(10.dp))
+            Button(onClick = {
+                chooseFolder(settings.folders.lastOrNull()?.path)?.let { path -> error = controller.addFolder(path) }
+            }) { Text("Додати папку") }
         }
-        Muted("Синхронізуються аудіофайли, плейлисти й тексти пісень (.lrc) зі збереженням структури папок.")
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+        if (settings.folders.isEmpty()) {
+            Muted("Поки що немає жодної папки. Натисніть «Додати папку».")
+        }
+        settings.folders.forEachIndexed { index, folder ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            key(folder.id, runtimeVersion) {
+                FolderRow(folder, controller, onRemove = { removing = folder })
+            }
+        }
+    }
+
+    removing?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("Прибрати «${folder.name}» із синхронізації?") },
+            text = { Text("Файли на комп'ютері й на телефоні залишаться, просто перестануть синхронізуватися.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    controller.removeFolder(folder.id)
+                }) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Скасувати") } },
+        )
+    }
+}
+
+private val emptyStats = kotlinx.coroutines.flow.MutableStateFlow(LibraryStats())
+
+@Composable
+private fun FolderRow(folder: SyncFolder, controller: AppController, onRemove: () -> Unit) {
+    val stats by (controller.runtime(folder.id)?.library?.stats ?: emptyStats).collectAsState()
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(folder.name, style = MaterialTheme.typography.titleSmall)
+                Muted(folder.path, maxLines = 1)
+            }
+            Spacer(Modifier.width(12.dp))
+            DirectionToggle(folder.direction) { controller.setDirection(folder.id, it) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val summary = when {
+                stats.error != null -> stats.error!!
+                stats.scanning && stats.scannedAt == 0L -> "Сканування…"
+                else -> "${Format.files(stats.files)} · ${Format.bytes(stats.bytes)}"
+            }
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (stats.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(220.dp),
+            )
+            Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
+            Text(
+                if (folder.direction == Direction.TO_PHONE) "Видаляти з телефона файли, видалені на ПК" else "Видаляти з ПК файли, видалені на телефоні",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+@Composable
+private fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp),
+    ) {
+        for ((value, label) in listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК")) {
+            val selected = value == direction
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .clickable(enabled = !selected) { onChange(value) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -212,7 +294,7 @@ private fun chooseFolder(initial: String?): String? {
     }
     val chooser = JFileChooser(initial ?: System.getProperty("user.home")).apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = "Виберіть папку з музикою"
+        dialogTitle = "Виберіть папку для синхронізації"
         isAcceptAllFileFilterUsed = false
     }
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
@@ -370,6 +452,15 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
                 Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
         }
+        if (progress != null && progress.folders.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                progress.folders.forEach { folder -> FolderProgressRow(folder) }
+            }
+        }
 
         HorizontalDivider(Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -395,13 +486,37 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
     }
 }
 
+@Composable
+private fun FolderProgressRow(folder: FolderProgress) {
+    val arrow = if (folder.direction == Direction.TO_PHONE) "ПК → телефон" else "Телефон → ПК"
+    val message = folder.message
+    val state = when {
+        !folder.enabled -> "вимкнено на телефоні"
+        folder.localPath == null -> "на телефоні не вибрано папку"
+        message != null -> message
+        folder.totalFiles == 0 -> "порожньо"
+        folder.remainingFiles == 0 -> "усе синхронізовано (${Format.files(folder.totalFiles)})"
+        else -> "${Format.number(folder.syncedFiles.toLong())} з ${Format.filesGenitive(folder.totalFiles)} · " +
+            "залишилось ${Format.files(folder.remainingFiles)} (${Format.bytes(folder.remainingBytes)})"
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(170.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(arrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(110.dp))
+        Column(Modifier.weight(1f)) {
+            Text(state, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            folder.localPath?.let { Muted("на телефоні: $it", maxLines = 1) }
+        }
+    }
+}
+
 private fun statusLine(progress: SyncProgress?, syncing: Boolean, lastSeen: Long, now: Long): String {
     if (syncing && progress != null) {
         return when (progress.phase) {
             SyncPhase.CONNECTING -> "Підключається…"
             SyncPhase.COMPARING -> "Порівнює файли…"
-            SyncPhase.DOWNLOADING -> "Завантажує музику · за сеанс: ${Format.files(progress.downloadedThisRun)}"
-            SyncPhase.DELETING -> "Видаляє треки, видалені на комп'ютері…"
+            SyncPhase.DOWNLOADING -> "Завантажує файли з комп'ютера · за сеанс: ${Format.files(progress.downloadedThisRun)}"
+            SyncPhase.UPLOADING -> "Надсилає файли на комп'ютер · за сеанс: ${Format.files(progress.uploadedThisRun)}"
+            SyncPhase.DELETING -> "Видаляє файли, видалені в джерелі…"
             else -> "Синхронізація…"
         }
     }

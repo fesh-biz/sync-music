@@ -8,7 +8,12 @@ import biz.fesh.syncmusic.shared.SyncPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import biz.fesh.syncmusic.shared.FolderInfo
+import biz.fesh.syncmusic.shared.FolderProgress
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -25,6 +30,14 @@ data class PairedServer(
     val apkVersionCode: Int = 0,
 )
 
+/** Where a PC folder lives on the phone. */
+@Serializable
+data class FolderMapping(
+    /** Absolute path on the phone; null = not chosen yet (phone → PC folders start like that). */
+    val localPath: String? = null,
+    val enabled: Boolean = true,
+)
+
 @Serializable
 data class LastSync(
     val at: Long,
@@ -35,7 +48,9 @@ data class LastSync(
     val syncedBytes: Long = 0,
     val downloaded: Int = 0,
     val deleted: Int = 0,
+    val uploaded: Int = 0,
     val message: String? = null,
+    val folders: List<FolderProgress> = emptyList(),
 )
 
 /** App settings backed by SharedPreferences, exposed as StateFlows for the UI. */
@@ -65,6 +80,15 @@ class Config private constructor(context: Context) {
     /** Where music is kept: "primary" (phone memory) or an SD card volume id. */
     val storageId: StateFlow<String> = _storageId.asStateFlow()
 
+    private val _folders = MutableStateFlow(readJson(KEY_FOLDERS, ListSerializer(FolderInfo.serializer())).orEmpty())
+    /** Folders the PC shares (cached from the last connection). */
+    val folders: StateFlow<List<FolderInfo>> = _folders.asStateFlow()
+
+    private val _mappings = MutableStateFlow(
+        readJson(KEY_MAPPINGS, MapSerializer(String.serializer(), FolderMapping.serializer())).orEmpty(),
+    )
+    val mappings: StateFlow<Map<String, FolderMapping>> = _mappings.asStateFlow()
+
     private val _lastSync = MutableStateFlow(readJson(KEY_LAST_SYNC, LastSync.serializer()))
     val lastSync: StateFlow<LastSync?> = _lastSync.asStateFlow()
 
@@ -72,7 +96,12 @@ class Config private constructor(context: Context) {
     fun setServer(value: PairedServer?) {
         _server.value = value
         writeJson(KEY_SERVER, value, PairedServer.serializer())
-        if (value == null) setLastSync(null)
+        if (value == null) {
+            setLastSync(null)
+            setFolders(emptyList())
+            _mappings.value = emptyMap()
+            prefs.edit().remove(KEY_MAPPINGS).apply()
+        }
     }
 
     @Synchronized
@@ -95,6 +124,22 @@ class Config private constructor(context: Context) {
         _storageId.value = value
         prefs.edit().putString(KEY_STORAGE, value).apply()
         setLastSync(null)
+    }
+
+    @Synchronized
+    fun setFolders(value: List<FolderInfo>) {
+        if (value == _folders.value) return
+        _folders.value = value
+        prefs.edit().putString(KEY_FOLDERS, Protocol.json.encodeToString(ListSerializer(FolderInfo.serializer()), value)).apply()
+    }
+
+    @Synchronized
+    fun setMapping(folderId: String, mapping: FolderMapping) {
+        val next = _mappings.value + (folderId to mapping)
+        _mappings.value = next
+        prefs.edit()
+            .putString(KEY_MAPPINGS, Protocol.json.encodeToString(MapSerializer(String.serializer(), FolderMapping.serializer()), next))
+            .apply()
     }
 
     fun setLastSync(value: LastSync?) {
@@ -121,6 +166,8 @@ class Config private constructor(context: Context) {
         private const val KEY_DELETE_REMOVED = "delete_removed"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_STORAGE = "storage_id"
+        private const val KEY_FOLDERS = "folders"
+        private const val KEY_MAPPINGS = "mappings"
 
         @Volatile
         private var instance: Config? = null

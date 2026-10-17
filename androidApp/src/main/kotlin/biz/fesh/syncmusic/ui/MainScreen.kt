@@ -74,6 +74,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import biz.fesh.syncmusic.BuildConfig
 import biz.fesh.syncmusic.data.Config
+import biz.fesh.syncmusic.data.FolderMapping
 import biz.fesh.syncmusic.data.LastSync
 import biz.fesh.syncmusic.data.PairedServer
 import biz.fesh.syncmusic.net.Api
@@ -82,13 +83,17 @@ import biz.fesh.syncmusic.net.FoundServer
 import biz.fesh.syncmusic.net.Http
 import biz.fesh.syncmusic.net.PairingException
 import biz.fesh.syncmusic.net.WifiNet
+import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FolderInfo
+import biz.fesh.syncmusic.shared.FolderProgress
 import biz.fesh.syncmusic.shared.Format
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncPhase
 import biz.fesh.syncmusic.shared.SyncProgress
 import biz.fesh.syncmusic.sync.EngineState
 import biz.fesh.syncmusic.sync.Storage
-import biz.fesh.syncmusic.sync.StorageOption
+import biz.fesh.syncmusic.sync.SyncedDb
+import biz.fesh.syncmusic.sync.Volume
 import biz.fesh.syncmusic.sync.SyncEngine
 import biz.fesh.syncmusic.sync.SyncWorker
 import kotlinx.coroutines.Dispatchers
@@ -133,20 +138,20 @@ fun MainScreen() {
     val engine by SyncEngine.state.collectAsState()
     val lastSync by config.lastSync.collectAsState()
     val autoSync by config.autoSync.collectAsState()
-    val deleteRemoved by config.deleteRemoved.collectAsState()
-    val storageId by config.storageId.collectAsState()
+    val folders by config.folders.collectAsState()
+    val mappings by config.mappings.collectAsState()
     var perms by remember { mutableStateOf(Perms.read(context)) }
-    var storages by remember { mutableStateOf(Storage.options(context)) }
+    var volumes by remember { mutableStateOf(Storage.volumes(context)) }
 
     OnResume {
         perms = Perms.read(context)
-        storages = Storage.options(context)
+        volumes = Storage.volumes(context)
     }
     // Notice an SD card being inserted or removed while the screen is open.
     LaunchedEffect(Unit) {
         while (true) {
             delay(10_000)
-            storages = withContext(Dispatchers.IO) { Storage.options(context) }
+            volumes = withContext(Dispatchers.IO) { Storage.volumes(context) }
         }
     }
 
@@ -160,8 +165,6 @@ fun MainScreen() {
         if (perms.storage && current != null && !current.revoked) SyncWorker.syncNow(context)
     }
 
-    val selectedStorage = storages.firstOrNull { it.id == storageId }
-
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -174,7 +177,7 @@ fun MainScreen() {
                 item {
                     NoticeCard(
                         title = "Дозвольте доступ до пам'яті",
-                        text = "Музика зберігається в папку Music/${Storage.FOLDER_NAME} у пам'яті телефона або на SD-карті, де її бачать усі плеєри. " +
+                        text = "Файли зберігаються в папках, які ви вибираєте, — у пам'яті телефона або на SD-карті. " +
                             "Для цього Android вимагає дозвіл «Доступ до всіх файлів».",
                         button = "Дозволити",
                     ) {
@@ -212,25 +215,25 @@ fun MainScreen() {
                     if (current.apkVersionCode > BuildConfig.VERSION_CODE) {
                         item { UpdateCard(current) }
                     }
-                    item { StatusCard(current, engine, lastSync, perms.storage, selectedStorage) }
+                    item { StatusCard(current, engine, lastSync, perms.storage) }
                     item {
-                        StorageCard(
+                        FoldersCard(
                             config = config,
                             server = current,
-                            options = storages,
-                            selectedId = storageId,
+                            folders = folders,
+                            mappings = mappings,
+                            volumes = volumes,
+                            progress = engine.progress?.folders?.takeIf { it.isNotEmpty() } ?: lastSync?.folders.orEmpty(),
                             running = engine.running,
                         )
                     }
                     item {
                         SettingsCard(
                             autoSync = autoSync,
-                            deleteRemoved = deleteRemoved,
                             onAutoSync = { enabled ->
                                 config.setAutoSync(enabled)
                                 if (enabled) SyncWorker.schedulePeriodic(context) else SyncWorker.cancelPeriodic(context)
                             },
-                            onDeleteRemoved = config::setDeleteRemoved,
                             onUnpair = {
                                 SyncWorker.cancelAll(context)
                                 config.setServer(null)
@@ -286,7 +289,7 @@ private fun Header() {
     Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
         Text("Sync Music", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(
-            "Музика з комп'ютера на телефоні — через Wi-Fi",
+            "Синхронізація файлів з комп'ютером через Wi-Fi",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -516,7 +519,7 @@ private fun Dot(color: Color) {
 private fun RevokedCard(server: PairedServer, config: Config) {
     SectionCard {
         Text("Комп'ютер «${server.serverName}» відключив цей телефон", style = MaterialTheme.typography.titleMedium)
-        Muted("Музика на телефоні залишилася. Щоб знову синхронізуватися, підключіться за кодом.")
+        Muted("Файли на телефоні залишилися. Щоб знову синхронізуватися, підключіться за кодом.")
         Button(onClick = { config.setServer(null) }) { Text("Підключитися знову") }
     }
 }
@@ -556,7 +559,6 @@ private fun StatusCard(
     engine: EngineState,
     lastSync: LastSync?,
     hasStorage: Boolean,
-    storage: StorageOption?,
 ) {
     val context = LocalContext.current
     val now by produceState(System.currentTimeMillis()) {
@@ -604,9 +606,9 @@ private fun StatusCard(
                     if (progress.remainingFiles == 0) "усе на місці" else Format.bytes(progress.remainingBytes),
                 )
             }
-            if (running && progress.phase == SyncPhase.DOWNLOADING) {
+            if (running && (progress.phase == SyncPhase.DOWNLOADING || progress.phase == SyncPhase.UPLOADING)) {
                 val file = progress.currentFile?.substringAfterLast('/')
-                if (file != null) Muted("Завантажується: $file", maxLines = 1)
+                if (file != null) Muted((if (progress.phase == SyncPhase.UPLOADING) "Надсилається: " else "Отримується: ") + file, maxLines = 1)
                 val eta = Format.eta(progress.remainingBytes, progress.bytesPerSecond)
                 if (progress.bytesPerSecond > 0) Muted(Format.speed(progress.bytesPerSecond) + (eta?.let { " · $it" } ?: ""))
             }
@@ -618,13 +620,10 @@ private fun StatusCard(
 
         Button(
             onClick = { SyncWorker.syncNow(context) },
-            enabled = !running && hasStorage && storage != null,
+            enabled = !running && hasStorage,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (running) "Триває синхронізація…" else "Синхронізувати зараз")
-        }
-        if (storage != null) {
-            Muted("Музика зберігається: ${storage.label} → ${storage.displayPath}")
         }
     }
 }
@@ -634,8 +633,9 @@ private fun statusText(running: Boolean, progress: SyncProgress?, lastSync: Last
         return when (progress?.phase) {
             null, SyncPhase.CONNECTING -> "Підключення до комп'ютера…"
             SyncPhase.COMPARING -> "Порівняння файлів…"
-            SyncPhase.DOWNLOADING -> "Завантаження музики…"
-            SyncPhase.DELETING -> "Видалення треків, видалених на ПК…"
+            SyncPhase.DOWNLOADING -> "Отримання файлів з комп'ютера…"
+            SyncPhase.UPLOADING -> "Надсилання файлів на комп'ютер…"
+            SyncPhase.DELETING -> "Видалення файлів, видалених у джерелі…"
             else -> "Синхронізація…"
         }
     }
@@ -644,7 +644,7 @@ private fun statusText(running: Boolean, progress: SyncProgress?, lastSync: Last
     return when (lastSync.phase) {
         SyncPhase.DONE -> if (lastSync.syncedFiles >= lastSync.totalFiles) "Усе синхронізовано · $moment" else "Синхронізовано · $moment"
         SyncPhase.STOPPED -> "Перервано $moment · продовжиться автоматично"
-        SyncPhase.ERROR -> (lastSync.message ?: "Помилка") + " · $moment"
+        SyncPhase.ERROR -> (lastSync.message ?: "Є проблеми з деякими папками") + " · $moment"
         else -> moment
     }
 }
@@ -658,115 +658,176 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
     }
 }
 
-// ------------------------------------------------------------------ storage
+// ------------------------------------------------------------------ folders
 
 @Composable
-private fun StorageCard(
+private fun FoldersCard(
     config: Config,
     server: PairedServer,
-    options: List<StorageOption>,
-    selectedId: String,
+    folders: List<FolderInfo>,
+    mappings: Map<String, FolderMapping>,
+    volumes: List<Volume>,
+    progress: List<FolderProgress>,
     running: Boolean,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var pending by remember { mutableStateOf<StorageOption?>(null) }
+    var picking by remember { mutableStateOf<FolderInfo?>(null) }
+    var pendingChange by remember { mutableStateOf<Pair<FolderInfo, String>?>(null) }
     var busy by remember { mutableStateOf(false) }
-    val selected = options.firstOrNull { it.id == selectedId }
 
     SectionCard {
-        Text("Де зберігати музику", style = MaterialTheme.typography.titleMedium)
-        options.forEach { option ->
-            val isSelected = option.id == selectedId
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(enabled = !running && !busy && !isSelected) { pending = option }
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = isSelected,
-                    onClick = { if (!isSelected) pending = option },
-                    enabled = !running && !busy,
-                )
-                Spacer(Modifier.width(6.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(option.label, style = MaterialTheme.typography.bodyLarge)
-                    val space = if (option.freeBytes >= 0 && option.totalBytes > 0) {
-                        "вільно ${Format.bytes(option.freeBytes)} з ${Format.bytes(option.totalBytes)}"
-                    } else {
-                        ""
-                    }
-                    Muted(listOf(option.displayPath, space).filter { it.isNotEmpty() }.joinToString(" · "), maxLines = 2)
-                }
-            }
+        Text("Папки", style = MaterialTheme.typography.titleMedium)
+        if (folders.isEmpty()) {
+            Muted("Список папок з'явиться після з'єднання з комп'ютером. Папки додаються в програмі на ПК.")
         }
-        if (selected == null) {
-            Text(
-                "Вибрану SD-карту не знайдено. Вставте її або виберіть іншу пам'ять — до того синхронізація не працюватиме.",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
+        folders.forEachIndexed { index, folder ->
+            if (index > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            val mapping = mappings[folder.id] ?: FolderMapping()
+            FolderRow(
+                folder = folder,
+                mapping = mapping,
+                state = progress.firstOrNull { it.id == folder.id },
+                volumes = volumes,
+                locked = running || busy,
+                onPick = { picking = folder },
+                onToggle = { enabled ->
+                    config.setMapping(folder.id, mapping.copy(enabled = enabled))
+                    if (enabled) SyncWorker.syncNow(context)
+                },
             )
         }
-        if (options.size == 1) {
-            Muted("SD-карту не виявлено. Коли вставите картку, вона з'явиться тут.")
-        }
-        if (selected?.appPrivate == true) {
-            Muted("На цій версії Android музика на SD-карті лежить у папці застосунку і видалиться, якщо видалити застосунок.")
-        }
-        if (running) {
-            Muted("Змінити пам'ять можна після завершення синхронізації.")
-        }
+        if (running) Muted("Змінити папку можна після завершення синхронізації.")
         if (busy) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Muted("Видаляємо музику зі старого місця…")
+                Muted("Видаляємо файли зі старої папки…")
             }
         }
     }
 
-    val target = pending
-    if (target != null) {
+    picking?.let { folder ->
+        val mapping = mappings[folder.id] ?: FolderMapping()
+        FolderPickerDialog(
+            title = if (folder.direction == Direction.TO_PHONE) "Куди зберігати «${folder.name}»" else "Яку папку надсилати в «${folder.name}»",
+            initialPath = mapping.localPath,
+            onPick = { path ->
+                picking = null
+                if (path != mapping.localPath) {
+                    if (folder.direction == Direction.TO_PHONE && mapping.localPath != null) {
+                        pendingChange = folder to path
+                    } else {
+                        config.setMapping(folder.id, mapping.copy(localPath = path))
+                        SyncWorker.syncNow(context)
+                    }
+                }
+            },
+            onDismiss = { picking = null },
+        )
+    }
+
+    pendingChange?.let { (folder, path) ->
+        val mapping = mappings[folder.id] ?: FolderMapping()
+        val oldPath = mapping.localPath
         fun apply(deleteOld: Boolean) {
-            pending = null
+            pendingChange = null
             busy = true
             scope.launch {
-                if (deleteOld && selected != null) {
-                    withContext(Dispatchers.IO) { Storage.wipe(context, server.serverId, selected) }
+                if (deleteOld && oldPath != null) {
+                    withContext(Dispatchers.IO) {
+                        val db = SyncedDb.load(context, server.serverId, folder.id, Direction.TO_PHONE, oldPath, config.storageId.value)
+                        Storage.wipe(context, db)
+                    }
                 }
-                config.setStorageId(target.id)
+                config.setMapping(folder.id, mapping.copy(localPath = path))
                 busy = false
                 SyncWorker.syncNow(context)
             }
         }
         AlertDialog(
-            onDismissRequest = { pending = null },
-            title = { Text("Зберігати музику: ${target.label}?") },
+            onDismissRequest = { pendingChange = null },
+            title = { Text("Перенести «${folder.name}»?") },
             text = {
                 Text(
-                    if (selected != null) {
-                        "Музику буде заново завантажено з комп'ютера в «${target.label}». " +
-                            "Що зробити з музикою, яка вже лежить у «${selected.label}»?"
-                    } else {
-                        "Музику буде заново завантажено з комп'ютера в «${target.label}»."
-                    },
+                    "Файли буде заново отримано з комп'ютера в «${Storage.describe(volumes, path)}». " +
+                        "Що зробити з файлами в старій папці «${Storage.describe(volumes, oldPath)}»?",
                 )
             },
             confirmButton = {
-                if (selected != null) {
-                    Row {
-                        TextButton(onClick = { apply(false) }) { Text("Залишити") }
-                        TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
-                    }
-                } else {
-                    TextButton(onClick = { apply(false) }) { Text("Так") }
+                Row {
+                    TextButton(onClick = { apply(false) }) { Text("Залишити") }
+                    TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
                 }
             },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { pendingChange = null }) { Text("Скасувати") } },
         )
+    }
+}
+
+@Composable
+private fun FolderRow(
+    folder: FolderInfo,
+    mapping: FolderMapping,
+    state: FolderProgress?,
+    volumes: List<Volume>,
+    locked: Boolean,
+    onPick: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+) {
+    val toPhone = folder.direction == Direction.TO_PHONE
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(folder.name, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (toPhone) "З комп'ютера на телефон" else "З телефона на комп'ютер",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Switch(checked = mapping.enabled, onCheckedChange = onToggle)
+        }
+        if (!mapping.enabled) {
+            Muted("Не синхронізується")
+            return@Column
+        }
+        val message = state?.message
+        val status = when {
+            mapping.localPath == null -> null
+            message != null -> message
+            state == null -> null
+            state.totalFiles == 0 -> "Порожня папка"
+            state.remainingFiles == 0 -> "Усе синхронізовано · ${Format.files(state.totalFiles)}"
+            else -> "${Format.number(state.syncedFiles.toLong())} з ${Format.filesGenitive(state.totalFiles)} · " +
+                "залишилось ${Format.bytes(state.remainingBytes)}"
+        }
+        status?.let { Muted(it, maxLines = 2) }
+        val path = mapping.localPath
+        if (path == null) {
+            Text(
+                if (toPhone) "Виберіть папку на телефоні" else "Виберіть папку телефона, яку надсилати на комп'ютер",
+                color = Amber,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Button(onClick = onPick, enabled = !locked) { Text("Вибрати папку") }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { Muted("На телефоні: ${Storage.describe(volumes, path)}", maxLines = 2) }
+                TextButton(onClick = onPick, enabled = !locked) { Text("Змінити") }
+            }
+        }
+        Muted(
+            when {
+                toPhone && folder.deleteMissing -> "Файли, видалені на ПК, видаляються й з телефона"
+                toPhone -> "Файли, видалені на ПК, залишаються на телефоні"
+                folder.deleteMissing -> "Файли, видалені на телефоні, видаляються й з ПК"
+                else -> "Файли, видалені на телефоні, залишаються на ПК"
+            },
+        )
+        if (!folder.available) {
+            Text("Папка на комп'ютері недоступна", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
@@ -775,9 +836,7 @@ private fun StorageCard(
 @Composable
 private fun SettingsCard(
     autoSync: Boolean,
-    deleteRemoved: Boolean,
     onAutoSync: (Boolean) -> Unit,
-    onDeleteRemoved: (Boolean) -> Unit,
     onUnpair: () -> Unit,
 ) {
     var confirm by remember { mutableStateOf(false) }
@@ -785,15 +844,9 @@ private fun SettingsCard(
         Text("Налаштування", style = MaterialTheme.typography.titleMedium)
         SwitchRow(
             title = "Автоматична синхронізація",
-            subtitle = "Кожні 15 хвилин, коли телефон у домашній Wi-Fi мережі й комп'ютер увімкнено",
+            subtitle = "Кожні 15 хвилин і щоразу, коли ви відкриваєте застосунок, — якщо телефон у домашній Wi-Fi мережі, а комп'ютер увімкнено",
             checked = autoSync,
             onChange = onAutoSync,
-        )
-        SwitchRow(
-            title = "Видаляти треки, видалені на ПК",
-            subtitle = "Видаляються лише файли, завантажені цим застосунком",
-            checked = deleteRemoved,
-            onChange = onDeleteRemoved,
         )
         HorizontalDivider()
         TextButton(onClick = { confirm = true }) {
@@ -804,7 +857,7 @@ private fun SettingsCard(
         AlertDialog(
             onDismissRequest = { confirm = false },
             title = { Text("Відключитися від комп'ютера?") },
-            text = { Text("Синхронізація припиниться. Музика на телефоні залишиться.") },
+            text = { Text("Синхронізація припиниться. Файли на телефоні й на комп'ютері залишаться.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false

@@ -55,6 +55,11 @@ class Library {
 
     fun fileFor(path: String): File? = snapshot?.byPath?.get(path)
 
+    /** Forget the cached listing so the next request rescans (after the PC received a file). */
+    fun invalidate() {
+        snapshot = snapshot?.let { Snapshot(it.root, it.entries, it.byPath, 0) }
+    }
+
     suspend fun manifest(serverId: String, maxAgeMs: Long = 5_000): Manifest {
         val snap = ensureFresh(maxAgeMs)
         return Manifest(serverId = serverId, generatedAt = System.currentTimeMillis(), files = snap?.entries.orEmpty())
@@ -109,7 +114,7 @@ class Library {
             Files.walkFileTree(rootNio, object : SimpleFileVisitor<Path>() {
                 override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                     val name = dir.fileName?.toString() ?: return FileVisitResult.CONTINUE
-                    if (dir != rootNio && (name.startsWith(".") || name.equals("\$RECYCLE.BIN", true))) {
+                    if (dir != rootNio && !Protocol.isSyncableDir(name)) {
                         return FileVisitResult.SKIP_SUBTREE
                     }
                     return FileVisitResult.CONTINUE

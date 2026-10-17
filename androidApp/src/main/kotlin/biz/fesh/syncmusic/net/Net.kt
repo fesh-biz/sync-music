@@ -5,6 +5,9 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import biz.fesh.syncmusic.shared.ErrorResponse
+import biz.fesh.syncmusic.shared.FolderInfo
+import biz.fesh.syncmusic.shared.FolderList
+import biz.fesh.syncmusic.shared.UploadOffset
 import biz.fesh.syncmusic.shared.Manifest
 import biz.fesh.syncmusic.shared.ManifestEntry
 import biz.fesh.syncmusic.shared.PairRequest
@@ -17,7 +20,10 @@ import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
+import java.io.RandomAccessFile
 import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
@@ -30,6 +36,15 @@ class UnauthorizedException : IOException("Комп'ютер не впізнає
 class PairingException(message: String) : IOException(message)
 class FileGoneException(path: String) : IOException("Файл зник на комп'ютері: $path")
 class StoppedException : IOException("stopped")
+class FolderUnavailableException(message: String) : IOException(message)
+
+sealed interface UploadResult {
+    data object Complete : UploadResult
+    data class Partial(val offset: Long) : UploadResult
+    data class Conflict(val offset: Long) : UploadResult
+    data object NoSpace : UploadResult
+    data class Rejected(val message: String) : UploadResult
+}
 
 /** Finds the Wi-Fi (or Ethernet) network so LAN traffic never goes through mobile data or a VPN. */
 object WifiNet {
@@ -137,11 +152,109 @@ class Api(
         }
     }
 
-    fun manifest(): Manifest {
+    fun folders(): List<FolderInfo> =
+        http.newCall(request(url("api/folders").build()).build()).execute().use { r ->
+            r.check()
+            r.parse(FolderList.serializer()).folders
+        }
+
+    /** Files of a PC folder. Throws [FolderUnavailableException] when the folder is missing on the PC. */
+    fun manifest(folderId: String): Manifest {
         val client = http.newBuilder().readTimeout(120, TimeUnit.SECONDS).build()
-        return client.newCall(request(url("api/manifest").build()).build()).execute().use { r ->
+        val manifestUrl = url("api/manifest").addQueryParameter("folder", folderId).build()
+        return client.newCall(request(manifestUrl).build()).execute().use { r ->
+            if (r.code == 503 || r.code == 404) throw FolderUnavailableException(r.errorText())
             r.check()
             r.parse(Manifest.serializer())
+        }
+    }
+
+    fun uploadOffset(folderId: String, path: String, size: Long): Long {
+        val offsetUrl = url("api/upload/offset")
+            .addQueryParameter("folder", folderId)
+            .addQueryParameter("path", path)
+            .addQueryParameter("size", size.toString())
+            .build()
+        return http.newCall(request(offsetUrl).build()).execute().use { r ->
+            r.check()
+            r.parse(UploadOffset.serializer()).offset
+        }
+    }
+
+    /**
+     * Sends [file] to the PC starting at [offset]. [onProgress] receives how many bytes of the
+     * file the PC has so far.
+     */
+    fun upload(
+        folderId: String,
+        path: String,
+        file: File,
+        size: Long,
+        modified: Long,
+        offset: Long,
+        onProgress: (Long) -> Unit,
+        isStopped: () -> Boolean,
+    ): UploadResult {
+        val uploadUrl = url("api/upload")
+            .addQueryParameter("folder", folderId)
+            .addQueryParameter("path", path)
+            .addQueryParameter("size", size.toString())
+            .addQueryParameter("modified", modified.toString())
+            .addQueryParameter("offset", offset.toString())
+            .build()
+        val body = object : RequestBody() {
+            override fun contentType() = "application/octet-stream".toMediaType()
+            override fun contentLength() = (size - offset).coerceAtLeast(0)
+            override fun writeTo(sink: BufferedSink) {
+                RandomAccessFile(file, "r").use { raf ->
+                    raf.seek(offset)
+                    val buffer = ByteArray(256 * 1024)
+                    var remaining = size - offset
+                    var sent = offset
+                    onProgress(sent)
+                    while (remaining > 0) {
+                        if (isStopped()) throw StoppedException()
+                        val n = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                        if (n < 0) throw IOException("файл змінився під час надсилання")
+                        sink.write(buffer, 0, n)
+                        remaining -= n
+                        sent += n
+                        onProgress(sent)
+                    }
+                }
+            }
+        }
+        val client = http.newBuilder().readTimeout(120, TimeUnit.SECONDS).build()
+        return client.newCall(request(uploadUrl).put(body).build()).execute().use { r ->
+            when (r.code) {
+                200 -> {
+                    val result = r.parse(UploadOffset.serializer())
+                    if (result.complete) UploadResult.Complete else UploadResult.Partial(result.offset)
+                }
+                401 -> throw UnauthorizedException()
+                409 -> UploadResult.Conflict(r.parse(UploadOffset.serializer()).offset)
+                507 -> UploadResult.NoSpace
+                400 -> UploadResult.Rejected(r.errorText())
+                403, 404, 503 -> throw FolderUnavailableException(r.errorText())
+                else -> throw IOException("HTTP ${r.code}")
+            }
+        }
+    }
+
+    /** Asks the PC to delete a file this phone uploaded earlier. Returns false if the PC kept it. */
+    fun deleteRemote(folderId: String, path: String, size: Long): Boolean {
+        val deleteUrl = url("api/file")
+            .addQueryParameter("folder", folderId)
+            .addQueryParameter("path", path)
+            .addQueryParameter("size", size.toString())
+            .build()
+        return http.newCall(request(deleteUrl).delete().build()).execute().use { r ->
+            when (r.code) {
+                204, 200 -> true
+                409, 403 -> false
+                401 -> throw UnauthorizedException()
+                else -> throw IOException("HTTP ${r.code}")
+            }
         }
     }
 
@@ -155,7 +268,7 @@ class Api(
      * Downloads [entry] into [part], resuming from what is already there.
      * [onProgress] receives the number of bytes of this file present on disk.
      */
-    fun download(entry: ManifestEntry, part: File, onProgress: (Long) -> Unit, isStopped: () -> Boolean) {
+    fun download(folderId: String, entry: ManifestEntry, part: File, onProgress: (Long) -> Unit, isStopped: () -> Boolean) {
         var existing = if (part.isFile) part.length() else 0L
         if (existing > entry.size) {
             part.delete()
@@ -165,7 +278,7 @@ class Api(
             onProgress(existing)
             return
         }
-        val fileUrl = url("api/file").addQueryParameter("path", entry.path).build()
+        val fileUrl = url("api/file").addQueryParameter("folder", folderId).addQueryParameter("path", entry.path).build()
         val builder = request(fileUrl)
         if (existing > 0) builder.header("Range", "bytes=$existing-")
         http.newCall(builder.build()).execute().use { r ->
