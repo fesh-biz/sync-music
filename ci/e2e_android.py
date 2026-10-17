@@ -406,7 +406,9 @@ def phone_count(root=PHONE_ROOT):
 
 def verify_phone(label, root=PHONE_ROOT, pc_root: Path = MUSIC):
     expected = expected_files(pc_root)
-    actual = phone_files(root)
+    # Android itself drops hidden files into folders (e.g. .thumbnails/.nomedia on a freshly
+    # mounted SD card). The app never syncs or deletes hidden files, so they are not ours to check.
+    actual = {k: v for k, v in phone_files(root).items() if not any(part.startswith(".") for part in k.split("/"))}
     want = {rel: md5(p) for rel, p in expected.items()}
     missing = sorted(set(want) - set(actual))
     extra = sorted(set(actual) - set(want))
