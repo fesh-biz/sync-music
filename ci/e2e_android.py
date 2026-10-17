@@ -244,11 +244,34 @@ def edit_fields():
     return [n for n in ui_nodes() if n.get("class") == "android.widget.EditText"]
 
 
+_disabled_imes: list[str] = []
+
+
+def disable_ime():
+    for ime in sh("ime list -s").split():
+        if ime.strip():
+            sh(f"ime disable {ime.strip()}")
+            _disabled_imes.append(ime.strip())
+    time.sleep(1)
+
+
+def restore_ime():
+    while _disabled_imes:
+        ime = _disabled_imes.pop()
+        sh(f"ime enable {ime}")
+        sh(f"ime set {ime}")
+
+
 def type_into(edit_index, value):
     """Types into a text field and checks that the text really arrived: right after the tap the
     keyboard may not be connected to the field yet, and then `input text` is silently lost."""
     typed = False
-    for attempt in range(4):
+    for attempt in range(5):
+        if attempt == 3:
+            # The on-screen keyboard keeps swallowing the keys: switch it off, so the key events
+            # go straight to the focused field (the app handles hardware-keyboard input).
+            print("typing: disabling the on-screen keyboard", flush=True)
+            disable_ime()
         nodes = edit_fields()
         if len(nodes) <= edit_index:
             return False
@@ -268,6 +291,7 @@ def type_into(edit_index, value):
             typed = True
             break
         print(f"typing {value!r}, attempt {attempt + 1}: the field shows {got!r}", flush=True)
+    restore_ime()
     if not typed:
         print(f"typing {value!r} failed", flush=True)
     if "mInputShown=true" in sh("dumpsys input_method"):
@@ -477,9 +501,18 @@ def pair():
         swipe(up=True)
     edits = [n for n in ui_nodes() if n.get("class") == "android.widget.EditText"]
     check("Manual address field present", len(edits) >= 1, f"{len(edits)} fields")
-    type_into(0, "10.0.2.2")
-    tap_text("ОК", 10)
-    found = wait_for("Комп'ютер «", 20, scroll=False)
+    found = None
+    for attempt in range(3):
+        if attempt:
+            shot(f"02-pc-not-found-{attempt}")
+            cold_start(f"pairing retry {attempt}")
+            wait_for("Шукати знову", 25)
+            to_top()
+        type_into(0, "10.0.2.2")
+        tap_text("ОК", 10)
+        found = wait_for("Комп'ютер «", 20, scroll=False)
+        if found is not None:
+            break
     check("PC found by manual address", found is not None)
     shot("02-pc-found")
 
