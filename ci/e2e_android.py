@@ -435,6 +435,13 @@ def start_pc():
           f"server={st.get('server')} files={st.get('libraryFiles')} expected={len(expected_files())}")
     time.sleep(4)
     shot("00-pc-started")
+    folders = st.get("folders") or []
+    if not st.get("devices") and folders:
+        # The dialog shown right after "Додати папку" before any phone is connected: file types and direction.
+        pc_command(f"show-phone-picker|{folders[0]['name']}|new")
+        time.sleep(2)
+        shot("00b-pc-new-folder-no-phone")
+        pc_command("hide-phone-picker")
 
 
 def stop_pc():
@@ -738,6 +745,11 @@ def scenario_pc_picks_phone_folder():
     pc_command(f"show-phone-picker|{DOCS.name}")
     time.sleep(3)
     shot("21-pc-phone-folder-picker")
+    pc_command("hide-phone-picker")
+    # As right after "Додати папку": file types, direction and the phone folder in one dialog.
+    pc_command(f"show-phone-picker|{DOCS.name}|new")
+    time.sleep(3)
+    shot("21b-pc-new-folder-dialog")
     pc_command("hide-phone-picker")
 
     new_phone = "/storage/emulated/0/Documents/Docs from PC"

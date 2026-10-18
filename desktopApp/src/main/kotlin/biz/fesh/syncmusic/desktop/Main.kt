@@ -183,8 +183,8 @@ private fun mirrorStatus(controller: AppController) {
                             controller.setPhoneFolder(folder.id, device.id, parts[2], parts.getOrNull(3) == "true")
                         }
                     }
-                    // show-phone-picker|<name> / hide-phone-picker (screenshots of the dialog)
-                    "show-phone-picker" -> folderByName(parts[1])?.let { controller.openPhonePicker(it.id) }
+                    // show-phone-picker|<name>[|new] / hide-phone-picker (screenshots of the dialog; "new" = as after adding)
+                    "show-phone-picker" -> folderByName(parts[1])?.let { controller.openPhonePicker(it.id, isNew = parts.getOrNull(2) == "new") }
                     "hide-phone-picker" -> controller.closePhonePicker()
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()

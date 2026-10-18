@@ -44,8 +44,11 @@ sealed interface PairResult {
     data object WrongPin : PairResult
 }
 
-/** The PC app asks to choose a phone folder for [folderId] ([deviceId] null = the first phone). */
-data class PhonePickerRequest(val folderId: String, val deviceId: String? = null)
+/**
+ * The PC app asks to choose a phone folder for [folderId] ([deviceId] null = the first phone).
+ * [isNew]: right after "Додати папку" — the dialog also offers which files to sync and works without a phone.
+ */
+data class PhonePickerRequest(val folderId: String, val deviceId: String? = null, val isNew: Boolean = false)
 
 /** A synced folder with its scanner and change watcher. */
 class FolderRuntime(val folder: SyncFolder, val library: Library, val watcher: FolderWatcher)
@@ -254,8 +257,8 @@ class AppController {
         savePhoneStorage()
     }
 
-    fun openPhonePicker(folderId: String, deviceId: String? = null) {
-        _phonePicker.value = PhonePickerRequest(folderId, deviceId)
+    fun openPhonePicker(folderId: String, deviceId: String? = null, isNew: Boolean = false) {
+        _phonePicker.value = PhonePickerRequest(folderId, deviceId, isNew)
     }
 
     fun closePhonePicker() {

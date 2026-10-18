@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -82,23 +84,16 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
     val live by controller.live.collectAsState()
     val folder = settings.folders.firstOrNull { it.id == request.folderId }
     val devices = settings.devices.sortedByDescending { it.lastSeen }
-    if (folder == null || devices.isEmpty()) {
+    // Right after adding, the dialog also sets which files and the direction, so it is useful without a phone.
+    if (folder == null || (devices.isEmpty() && !request.isNew)) {
         LaunchedEffect(Unit) { controller.closePhonePicker() }
         return
     }
     var deviceId by remember(request) {
-        mutableStateOf(request.deviceId?.takeIf { id -> devices.any { it.id == id } } ?: devices.first().id)
+        mutableStateOf(request.deviceId?.takeIf { id -> devices.any { it.id == id } } ?: devices.firstOrNull()?.id)
     }
-    val device = devices.firstOrNull { it.id == deviceId } ?: devices.first()
+    val device = devices.firstOrNull { it.id == deviceId } ?: devices.firstOrNull()
     val source = SyncProgressSource { d -> live[d.id]?.progress ?: d.lastProgress }
-    val storage = storages[device.id]
-    val progress = PhoneFolders.progressOf(device, source, folder.id)
-    val target = folder.phoneTargets[device.id]
-    val current = PhoneFolders.currentPath(target, progress)
-    // Phone folders of the other PC folders on this phone, to warn about nesting.
-    val others = settings.folders.filter { it.id != folder.id }.mapNotNull { other ->
-        PhoneFolders.currentPath(other.phoneTargets[device.id], PhoneFolders.progressOf(device, source, other.id))?.let { other.name to it }
-    }
 
     Dialog(onDismissRequest = controller::closePhonePicker, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -107,14 +102,23 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
         ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Папка на телефоні для «${folder.name}»", style = MaterialTheme.typography.titleLarge)
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    if (request.isNew) "Нова папка «${folder.name}»" else "Папка на телефоні для «${folder.name}»",
+                    style = MaterialTheme.typography.titleLarge,
+                )
                 Note(folder.path, maxLines = 1)
-                if (devices.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        devices.forEach { d -> Chip(d.name, d.id == device.id) { deviceId = d.id } }
-                    }
+                // Inside the dialog, so its confirmation shows on top. A just added folder has nothing on the
+                // phone yet: narrowing the file types removes nothing there, no need to ask.
+                val setFileTypes = fileTypesSetter(folder, controller, askFirst = !request.isNew)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Які файли синхронізувати", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    FileTypesToggle(folder.fileTypes, setFileTypes)
                 }
+                Note(Format.fileTypesHint(folder.fileTypes))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (folder.direction == Direction.TO_PHONE) "Куди класти файли з комп'ютера" else "Яку папку телефона надсилати на комп'ютер",
@@ -123,11 +127,45 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
                     )
                     DirectionToggle(folder.direction) { controller.setDirection(folder.id, it) }
                 }
-                key(device.id, folder.direction) {
-                    PickerBody(folder, device, storage, current, others, controller)
+                if (device == null) {
+                    NoPhoneYet(folder, controller)
+                } else {
+                    if (devices.size > 1) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            devices.forEach { d -> Chip(d.name, d.id == device.id) { deviceId = d.id } }
+                        }
+                    }
+                    val progress = PhoneFolders.progressOf(device, source, folder.id)
+                    val current = PhoneFolders.currentPath(folder.phoneTargets[device.id], progress)
+                    // Phone folders of the other PC folders on this phone, to warn about nesting.
+                    val others = settings.folders.filter { it.id != folder.id }.mapNotNull { other ->
+                        PhoneFolders.currentPath(other.phoneTargets[device.id], PhoneFolders.progressOf(device, source, other.id))?.let { other.name to it }
+                    }
+                    key(device.id, folder.direction) {
+                        PickerBody(folder, device, storages[device.id], current, others, controller, cancelLabel = if (request.isNew) "Пізніше" else "Скасувати")
+                    }
                 }
             }
         }
+    }
+}
+
+/** A folder added before any phone was connected: the phone folder is chosen later (or on the phone). */
+@Composable
+private fun NoPhoneYet(folder: SyncFolder, controller: AppController) {
+    Note(
+        if (folder.direction == Direction.TO_PHONE) {
+            "Телефон ще не підключено. Папку на телефоні можна буде вибрати після підключення — тут або в застосунку на телефоні. " +
+                "Без вибору телефон покладе файли в «Sync Music/${folder.name}»."
+        } else {
+            "Телефон ще не підключено. Яку папку телефона надсилати, можна буде вибрати після підключення — " +
+                "тут або в застосунку на телефоні."
+        },
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.weight(1f))
+        Button(onClick = controller::closePhonePicker) { Text("Готово") }
     }
 }
 
@@ -139,6 +177,7 @@ private fun PickerBody(
     current: String?,
     others: List<Pair<String, String>>,
     controller: AppController,
+    cancelLabel: String,
 ) {
     val toPhone = folder.direction == Direction.TO_PHONE
     val volumes = storage?.volumes?.takeIf { it.isNotEmpty() }
@@ -191,7 +230,7 @@ private fun PickerBody(
     Text(describe(selected), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     Surface(
-        Modifier.fillMaxWidth().height(250.dp),
+        Modifier.fillMaxWidth().height(220.dp),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
@@ -268,7 +307,7 @@ private fun PickerBody(
 
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = controller::closePhonePicker) { Text("Скасувати") }
+        TextButton(onClick = controller::closePhonePicker) { Text(cancelLabel) }
         Spacer(Modifier.weight(1f))
         if (toPhone && !creating) {
             OutlinedButton(onClick = { creating = true }) { Text("Нова папка") }

@@ -203,9 +203,9 @@ private fun FoldersCard(
             Button(onClick = {
                 chooseFolder(settings.folders.lastOrNull()?.path)?.let { path ->
                     error = controller.addFolder(path)
-                    // Right away: where it goes on the phone (only possible once a phone is connected).
-                    if (error == null && controller.settings.value.devices.isNotEmpty()) {
-                        controller.settings.value.folders.lastOrNull()?.let { controller.openPhonePicker(it.id) }
+                    // Right away: which files, which direction and (once a phone is connected) where it goes on the phone.
+                    if (error == null) {
+                        controller.settings.value.folders.lastOrNull()?.let { controller.openPhonePicker(it.id, isNew = true) }
                     }
                 }
             }) { Text("Додати папку") }
@@ -338,21 +338,23 @@ private fun PhoneFolderLine(
 /** "Файли: [Музика] [Фільми] [Усі]" with what the choice takes. */
 @Composable
 private fun FileTypesRow(folder: SyncFolder, controller: AppController) {
-    var confirm by remember { mutableStateOf<FileTypes?>(null) }
+    val change = fileTypesSetter(folder, controller)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Файли:", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(10.dp))
-        FileTypesToggle(folder.fileTypes) { types ->
-            // Narrowing a mirrored PC → phone folder removes the other files from the phone: ask first.
-            if (folder.direction == Direction.TO_PHONE && folder.deleteMissing && types != FileTypes.ALL) {
-                confirm = types
-            } else {
-                controller.setFileTypes(folder.id, types)
-            }
-        }
+        FileTypesToggle(folder.fileTypes, change)
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f)) { Muted(Format.fileTypesHint(folder.fileTypes), maxLines = 2) }
     }
+}
+
+/**
+ * Applies a file-type choice. Narrowing a mirrored PC → phone folder removes the other files from the phone,
+ * so it asks first — unless [askFirst] is false (a folder that was just added has nothing on the phone yet).
+ */
+@Composable
+internal fun fileTypesSetter(folder: SyncFolder, controller: AppController, askFirst: Boolean = true): (FileTypes) -> Unit {
+    var confirm by remember(folder.id) { mutableStateOf<FileTypes?>(null) }
     confirm?.let { types ->
         val what = if (types == FileTypes.MUSIC) "лише музику" else "лише фільми"
         val other = if (types == FileTypes.MUSIC) "не є музикою" else "не є фільмами"
@@ -373,6 +375,13 @@ private fun FileTypesRow(folder: SyncFolder, controller: AppController) {
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Скасувати") } },
         )
+    }
+    return { types ->
+        if (askFirst && folder.direction == Direction.TO_PHONE && folder.deleteMissing && types != FileTypes.ALL) {
+            confirm = types
+        } else {
+            controller.setFileTypes(folder.id, types)
+        }
     }
 }
 
