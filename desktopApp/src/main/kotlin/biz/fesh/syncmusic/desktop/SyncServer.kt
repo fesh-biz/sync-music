@@ -5,6 +5,7 @@ import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FolderList
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PairResponse
+import biz.fesh.syncmusic.shared.PhoneStorage
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncProgress
 import biz.fesh.syncmusic.shared.UploadOffset
@@ -131,8 +132,16 @@ class SyncServer(private val app: AppController) {
             }
 
             get("/api/folders") {
-                call.requireDevice() ?: return@get
-                call.respond(FolderList(app.folderInfos()))
+                val device = call.requireDevice() ?: return@get
+                call.respond(FolderList(app.folderInfos(device.id)))
+            }
+
+            // Storages and folders of the phone, for choosing the phone folder in the PC app.
+            post("/api/phone/storage") {
+                val device = call.requireDevice() ?: return@post
+                val storage = call.receive<PhoneStorage>()
+                app.onPhoneStorage(device.id, storage)
+                call.respond(HttpStatusCode.NoContent)
             }
 
             // Without ?folder= (version 1 phones) the first PC -> phone folder is used.

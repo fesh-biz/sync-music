@@ -3,6 +3,7 @@ package biz.fesh.syncmusic.desktop
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.PairRequest
+import biz.fesh.syncmusic.shared.PhoneStorage
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.ServerInfo
 import biz.fesh.syncmusic.shared.SyncProgress
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import java.io.File
 import java.net.InetAddress
 import java.security.MessageDigest
@@ -39,6 +42,9 @@ sealed interface PairResult {
     data class Ok(val token: String) : PairResult
     data object WrongPin : PairResult
 }
+
+/** The PC app asks to choose a phone folder for [folderId] ([deviceId] null = the first phone). */
+data class PhonePickerRequest(val folderId: String, val deviceId: String? = null)
 
 /** A synced folder with its scanner and change watcher. */
 class FolderRuntime(val folder: SyncFolder, val library: Library, val watcher: FolderWatcher)
@@ -68,6 +74,14 @@ class AppController {
     val events: SharedFlow<String> = _events.asSharedFlow()
 
     /** null until the first (background) lookup finishes. */
+    private val phoneStorageFile = File(AppPaths.dataDir, "phones.json")
+    private val _phoneStorage = MutableStateFlow(loadPhoneStorage())
+    /** Storages and folders each phone reported (device id -> storage), for the phone folder picker. */
+    val phoneStorage: StateFlow<Map<String, PhoneStorage>> = _phoneStorage.asStateFlow()
+
+    private val _phonePicker = MutableStateFlow<PhonePickerRequest?>(null)
+    val phonePicker: StateFlow<PhonePickerRequest?> = _phonePicker.asStateFlow()
+
     private val _addresses = MutableStateFlow<List<NetUtil.LocalAddress>?>(null)
     val addresses: StateFlow<List<NetUtil.LocalAddress>?> = _addresses.asStateFlow()
 
@@ -186,8 +200,10 @@ class AppController {
         return runtimes[folder.id]
     }
 
-    fun folderInfos(): List<FolderInfo> = settings.value.folders.map { folder ->
+    /** Folders as the phone [deviceId] sees them (with the phone folder chosen here for it). */
+    fun folderInfos(deviceId: String? = null): List<FolderInfo> = settings.value.folders.map { folder ->
         val stats = runtimes[folder.id]?.library?.stats?.value
+        val target = deviceId?.let { folder.phoneTargets[it] }
         FolderInfo(
             id = folder.id,
             name = folder.name,
@@ -197,7 +213,69 @@ class AppController {
             files = stats?.files ?: 0,
             bytes = stats?.bytes ?: 0,
             available = File(folder.path).isDirectory,
+            phonePath = target?.path,
+            phonePathAt = target?.at ?: 0,
+            phoneDeleteOld = folder.direction == Direction.TO_PHONE && target?.deleteOld == true,
         )
+    }
+
+    // ---------- phone folders ----------
+
+    /** Chooses the phone folder of [folderId] on the phone [deviceId]; the phone applies it on its next sync. */
+    fun setPhoneFolder(folderId: String, deviceId: String, path: String, deleteOld: Boolean) {
+        val clean = path.trimEnd('/').ifEmpty { "/" }
+        settings.update { s ->
+            s.copy(
+                folders = s.folders.map {
+                    if (it.id == folderId) {
+                        // Strictly increasing, so a quick second choice is never taken for an already applied one.
+                        val at = maxOf(System.currentTimeMillis(), (it.phoneTargets[deviceId]?.at ?: 0) + 1)
+                        it.copy(phoneTargets = it.phoneTargets + (deviceId to PhoneTarget(clean, at, deleteOld)))
+                    } else {
+                        it
+                    }
+                },
+            )
+        }
+        syncRuntimes()
+        AppLog.i("Phone folder for $folderId on $deviceId: $clean (deleteOld=$deleteOld)")
+    }
+
+    fun onPhoneStorage(deviceId: String, storage: PhoneStorage) {
+        val stamped = storage.copy(at = System.currentTimeMillis())
+        _phoneStorage.update { it + (deviceId to stamped) }
+        savePhoneStorage()
+    }
+
+    fun openPhonePicker(folderId: String, deviceId: String? = null) {
+        _phonePicker.value = PhonePickerRequest(folderId, deviceId)
+    }
+
+    fun closePhonePicker() {
+        _phonePicker.value = null
+    }
+
+    private fun loadPhoneStorage(): Map<String, PhoneStorage> = try {
+        if (phoneStorageFile.isFile) {
+            Protocol.json.decodeFromString(MapSerializer(String.serializer(), PhoneStorage.serializer()), phoneStorageFile.readText())
+        } else {
+            emptyMap()
+        }
+    } catch (t: Throwable) {
+        AppLog.w("phones.json is corrupted", t)
+        emptyMap()
+    }
+
+    @Synchronized
+    private fun savePhoneStorage() {
+        try {
+            val text = Protocol.json.encodeToString(MapSerializer(String.serializer(), PhoneStorage.serializer()), _phoneStorage.value)
+            val tmp = File(phoneStorageFile.parentFile, phoneStorageFile.name + ".tmp")
+            tmp.writeText(text)
+            java.nio.file.Files.move(tmp.toPath(), phoneStorageFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } catch (t: Throwable) {
+            AppLog.w("Cannot save phones.json", t)
+        }
     }
 
     /** Adds a PC folder (PC → phone by default). Returns an error text or null. */
@@ -343,6 +421,10 @@ class AppController {
     fun removeDevice(id: String) {
         settings.update { s -> s.copy(devices = s.devices.filter { it.id != id }) }
         _live.update { it - id }
+        if (id in _phoneStorage.value) {
+            _phoneStorage.update { it - id }
+            savePhoneStorage()
+        }
     }
 
     // ---------- progress ----------

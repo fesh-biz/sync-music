@@ -688,6 +688,38 @@ def scenario_docs():
     shot("20-docs-folder")
 
 
+def scenario_pc_picks_phone_folder():
+    """The phone folder is chosen in the PC app: the phone reports its folders, applies the choice
+    on its next sync and moves the files there without downloading them again."""
+    dev = (status().get("devices") or [{}])[0]
+    check("Phone reported its storages and folders to the PC",
+          (dev.get("storageVolumes") or 0) >= 1 and (dev.get("storageDirs") or 0) > 0,
+          f"volumes={dev.get('storageVolumes')} dirs={dev.get('storageDirs')}")
+    pc_command(f"show-phone-picker|{DOCS.name}")
+    time.sleep(3)
+    shot("21-pc-phone-folder-picker")
+    pc_command("hide-phone-picker")
+
+    new_phone = "/storage/emulated/0/Documents/Docs from PC"
+    before = phone_count(DOCS_PHONE)
+    pc_command(f"set-phone-folder|{DOCS.name}|{new_phone}")
+    st_folder = next((f for f in status().get("folders") or [] if f.get("name") == DOCS.name), {})
+    check("PC remembers the phone folder", st_folder.get("phoneTarget") == new_phone, st_folder)
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("phone folder chosen on the PC", None, since)
+    p = device_progress()
+    docs = next((f for f in p.get("folders") or [] if f.get("name") == DOCS.name), {})
+    check("Phone uses the folder chosen on the PC", docs.get("phonePath") == new_phone,
+          f"phonePath={docs.get('phonePath')} localPath={docs.get('localPath')} msg={docs.get('message')}")
+    check("Files moved on the phone, not downloaded again", p.get("downloadedThisRun") == 0,
+          f"downloaded={p.get('downloadedThisRun')}")
+    verify_phone("folder chosen on the PC", root=new_phone, pc_root=DOCS)
+    check("Old phone folder is empty after the move", phone_count(DOCS_PHONE) <= 0,
+          f"{phone_count(DOCS_PHONE)} files left of {before}")
+    shot("22-docs-moved")
+
+
 def scenario_pc_delete():
     files = expected_files()
     victims = sorted(files)[:2]
@@ -932,7 +964,7 @@ def main():
         since = pair()
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
-                         scenario_camera, scenario_docs, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
+                         scenario_camera, scenario_docs, scenario_pc_picks_phone_folder, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
                          scenario_remove_folder, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:
                 check(f"{scenario.__name__} not run: e2e time budget used up", False)

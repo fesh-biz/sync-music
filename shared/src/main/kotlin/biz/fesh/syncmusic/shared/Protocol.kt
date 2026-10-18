@@ -16,6 +16,8 @@ import kotlinx.serialization.json.Json
  *  - Phone → PC: the phone uploads files (PUT with an offset for resume). Nothing on the PC is
  *    ever deleted or overwritten: a different file under a taken name is saved as a copy.
  *  - The phone reports [SyncProgress] back so the PC can show it.
+ *  - The phone reports its storages and folders ([PhoneStorage]) once per sync, so the PC app can
+ *    choose the phone folder for a PC folder ([FolderInfo.phonePath]); the phone applies it on its next sync.
  */
 object Protocol {
     const val VERSION = 2
@@ -110,10 +112,70 @@ data class FolderInfo(
     val files: Int = 0,
     val bytes: Long = 0,
     val available: Boolean = true,
+    /** Folder on the requesting phone chosen in the PC app (absolute path); null = chosen on the phone. */
+    val phonePath: String? = null,
+    /** When [phonePath] was chosen (PC clock). The phone applies every choice once, so it can still change it later. */
+    val phonePathAt: Long = 0,
+    /** PC → phone: if the files cannot be moved to [phonePath] (another storage), delete the copies in the old phone folder. */
+    val phoneDeleteOld: Boolean = false,
 )
 
 @Serializable
 data class FolderList(val folders: List<FolderInfo>)
+
+/** A storage of the phone (internal memory or an SD card) with its folders, so the PC can offer them. */
+@Serializable
+data class PhoneVolume(
+    val id: String,
+    val label: String,
+    /** Absolute path of the volume on the phone, e.g. /storage/emulated/0. */
+    val root: String,
+    val removable: Boolean = false,
+    /** Android 8–10 SD card: only the app's own folder is writable (it is removed with the app). */
+    val appPrivate: Boolean = false,
+    val freeBytes: Long = -1,
+    val totalBytes: Long = -1,
+    /** Folders inside the volume, relative to [root] with '/' separators, a few levels deep. */
+    val dirs: List<String> = emptyList(),
+    /** Not all folders fit into [dirs]. */
+    val truncated: Boolean = false,
+)
+
+@Serializable
+data class PhoneStorage(
+    val volumes: List<PhoneVolume> = emptyList(),
+    val at: Long = 0,
+) {
+    fun volumeOf(path: String): PhoneVolume? = volumes.filter { inside(path, it.root) }.maxByOrNull { it.root.length }
+
+    /** "Пам'ять телефона › Music/Sync Music" */
+    fun describe(path: String): String {
+        val volume = volumeOf(path)
+        if (volume == null) {
+            if (inside(path, PRIMARY_ROOT)) return label(PRIMARY_LABEL, path.removePrefix(PRIMARY_ROOT))
+            return path
+        }
+        return label(volume.label, path.removePrefix(volume.root))
+    }
+
+    companion object {
+        /** Internal memory on practically every Android phone (used before the phone reported its storage). */
+        const val PRIMARY_ROOT = "/storage/emulated/0"
+        const val PRIMARY_LABEL = "Пам'ять телефона"
+
+        fun inside(path: String, root: String): Boolean = path == root || path.startsWith(root.trimEnd('/') + "/")
+
+        private fun label(volume: String, relative: String): String {
+            val rel = relative.trim('/')
+            return if (rel.isEmpty()) volume else "$volume › $rel"
+        }
+
+        /** A folder name the phone and Windows both accept. */
+        fun isValidName(name: String): Boolean =
+            name.isNotBlank() && name == name.trim() && !name.startsWith(".") && !name.endsWith(".") &&
+                name.none { it in "/\\<>:\"|?*" || it.code < 32 }
+    }
+}
 
 @Serializable
 data class UploadOffset(
@@ -167,6 +229,10 @@ data class FolderProgress(
     val localPath: String? = null,
     val enabled: Boolean = true,
     val message: String? = null,
+    /** Absolute path of the phone folder (null = not chosen yet). */
+    val phonePath: String? = null,
+    /** The last folder choice made on the PC that the phone has applied ([FolderInfo.phonePathAt]). */
+    val pcChoiceAt: Long = 0,
 ) {
     val remainingFiles: Int get() = (totalFiles - syncedFiles).coerceAtLeast(0)
     val remainingBytes: Long get() = (totalBytes - syncedBytes).coerceAtLeast(0)

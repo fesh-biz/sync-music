@@ -91,8 +91,8 @@ import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncPhase
 import biz.fesh.syncmusic.shared.SyncProgress
 import biz.fesh.syncmusic.sync.EngineState
+import biz.fesh.syncmusic.sync.FolderMove
 import biz.fesh.syncmusic.sync.Storage
-import biz.fesh.syncmusic.sync.SyncedDb
 import biz.fesh.syncmusic.sync.Volume
 import biz.fesh.syncmusic.sync.SyncEngine
 import biz.fesh.syncmusic.sync.SyncWorker
@@ -679,7 +679,7 @@ private fun FoldersCard(
     SectionCard {
         Text("Папки", style = MaterialTheme.typography.titleMedium)
         if (folders.isEmpty()) {
-            Muted("Список папок з'явиться після з'єднання з комп'ютером. Папки додаються в програмі на ПК.")
+            Muted("Список папок з'явиться після з'єднання з комп'ютером. Папки додаються в програмі на ПК; там само можна вибрати й папку на телефоні.")
         }
         folders.forEachIndexed { index, folder ->
             if (index > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp))
@@ -702,7 +702,7 @@ private fun FoldersCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Muted("Видаляємо файли зі старої папки…")
+                Muted("Переносимо папку…")
             }
         }
     }
@@ -730,17 +730,14 @@ private fun FoldersCard(
     pendingChange?.let { (folder, path) ->
         val mapping = mappings[folder.id] ?: FolderMapping()
         val oldPath = mapping.localPath
+        val movable = remember(oldPath, path) { FolderMove.canMove(Storage.volumes(context), oldPath, path) }
         fun apply(deleteOld: Boolean) {
             pendingChange = null
             busy = true
             scope.launch {
-                if (deleteOld && oldPath != null) {
-                    withContext(Dispatchers.IO) {
-                        val db = SyncedDb.load(context, server.serverId, folder.id, Direction.TO_PHONE, oldPath, config.storageId.value)
-                        Storage.wipe(context, db)
-                    }
+                withContext(Dispatchers.IO) {
+                    FolderMove.change(context, config, server.serverId, folder, mapping, path, deleteOld)
                 }
-                config.setMapping(folder.id, mapping.copy(localPath = path))
                 busy = false
                 SyncWorker.syncNow(context)
             }
@@ -750,14 +747,23 @@ private fun FoldersCard(
             title = { Text("Перенести «${folder.name}»?") },
             text = {
                 Text(
-                    "Файли буде заново отримано з комп'ютера в «${Storage.describe(volumes, path)}». " +
-                        "Що зробити з файлами в старій папці «${Storage.describe(volumes, oldPath)}»?",
+                    if (movable) {
+                        "Файли буде перенесено з «${Storage.describe(volumes, oldPath)}» у «${Storage.describe(volumes, path)}» " +
+                            "без повторного завантаження."
+                    } else {
+                        "Файли буде заново отримано з комп'ютера в «${Storage.describe(volumes, path)}». " +
+                            "Що зробити з файлами в старій папці «${Storage.describe(volumes, oldPath)}»?"
+                    },
                 )
             },
             confirmButton = {
-                Row {
-                    TextButton(onClick = { apply(false) }) { Text("Залишити") }
-                    TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
+                if (movable) {
+                    TextButton(onClick = { apply(false) }) { Text("Перенести") }
+                } else {
+                    Row {
+                        TextButton(onClick = { apply(false) }) { Text("Залишити") }
+                        TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
+                    }
                 }
             },
             dismissButton = { TextButton(onClick = { pendingChange = null }) { Text("Скасувати") } },

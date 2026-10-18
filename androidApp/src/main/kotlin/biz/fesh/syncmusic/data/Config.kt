@@ -36,6 +36,8 @@ data class FolderMapping(
     /** Absolute path on the phone; null = not chosen yet (phone → PC folders start like that). */
     val localPath: String? = null,
     val enabled: Boolean = true,
+    /** The last folder choice made on the PC that was applied here (PC clock, [biz.fesh.syncmusic.shared.FolderInfo.phonePathAt]). */
+    val pcChoiceAt: Long = 0,
 )
 
 @Serializable

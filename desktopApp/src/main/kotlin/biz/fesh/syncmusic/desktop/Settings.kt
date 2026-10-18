@@ -31,6 +31,19 @@ data class SyncFolder(
     val direction: Direction = Direction.TO_PHONE,
     /** Delete on the receiving side what disappeared on the sending side. */
     val deleteMissing: Boolean = true,
+    /** Phone folder chosen here in the PC app, per phone (device id). */
+    val phoneTargets: Map<String, PhoneTarget> = emptyMap(),
+)
+
+/** A phone folder chosen in the PC app; the phone applies it on its next sync. */
+@Serializable
+data class PhoneTarget(
+    /** Absolute path on the phone. */
+    val path: String,
+    /** When it was chosen; the phone applies every choice once. */
+    val at: Long,
+    /** PC → phone: if the files cannot be moved there, delete the copies in the old phone folder. */
+    val deleteOld: Boolean = false,
 )
 
 @Serializable

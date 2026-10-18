@@ -11,6 +11,8 @@ import android.os.storage.StorageManager
 import androidx.core.content.ContextCompat
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.FolderInfo
+import biz.fesh.syncmusic.shared.PhoneStorage
+import biz.fesh.syncmusic.shared.PhoneVolume
 import biz.fesh.syncmusic.shared.Protocol
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -174,6 +176,55 @@ object Storage {
         }
     }
 
+    /**
+     * Storages with their folders a few levels deep, for the folder picker in the PC app.
+     * Synced folders are listed but not descended into (their artist/album folders are noise),
+     * the "Android" system folder and hidden folders are skipped.
+     */
+    fun tree(context: Context, synced: Collection<String>): PhoneStorage {
+        val skip = synced.mapTo(HashSet()) { it.trimEnd('/') }
+        val result = volumes(context).map { volume ->
+            val dirs = ArrayList<String>()
+            var truncated = false
+            var level = listOf("" to volume.root)
+            depth@ for (depth in 1..TREE_DEPTH) {
+                val next = ArrayList<Pair<String, File>>()
+                for ((rel, dir) in level) {
+                    if (rel.isNotEmpty() && dir.path.trimEnd('/') in skip) continue
+                    val children = dir.listFiles()
+                        ?.filter { it.isDirectory && !it.name.startsWith(".") && !(rel.isEmpty() && !volume.appPrivate && it.name == "Android") }
+                        ?.sortedBy { it.name.lowercase() }
+                        ?: continue
+                    for (child in children) {
+                        if (dirs.size >= TREE_MAX_DIRS) {
+                            truncated = true
+                            break@depth
+                        }
+                        val path = if (rel.isEmpty()) child.name else "$rel/${child.name}"
+                        dirs += path
+                        next += path to child
+                    }
+                }
+                level = next
+            }
+            PhoneVolume(
+                id = volume.id,
+                label = volume.label,
+                root = volume.root.path,
+                removable = volume.removable,
+                appPrivate = volume.appPrivate,
+                freeBytes = volume.freeBytes,
+                totalBytes = volume.totalBytes,
+                dirs = dirs,
+                truncated = truncated,
+            )
+        }
+        return PhoneStorage(result, System.currentTimeMillis())
+    }
+
+    private const val TREE_DEPTH = 4
+    private const val TREE_MAX_DIRS = 4000
+
     /** Deletes the files this app downloaded into [db]'s folder and forgets them. Returns how many. */
     fun wipe(context: Context, db: SyncedDb): Int {
         val root = File(db.root)
@@ -248,6 +299,15 @@ class SyncedDb private constructor(private val file: File, val root: String, ini
         private val legacySerializer = MapSerializer(String.serializer(), SyncedRecord.serializer())
 
         private fun safe(text: String) = text.replace(Regex("[^A-Za-z0-9_-]"), "_")
+
+        /** The PC → phone folder was moved from [from] to [to] as a whole: keep its records (nothing is downloaded again). */
+        fun rebase(context: Context, serverId: String, folderId: String, from: String, to: String, legacyStorageId: String) {
+            val old = load(context, serverId, folderId, Direction.TO_PHONE, from, legacyStorageId)
+            SyncedDb(old.file, to, old.map).apply {
+                dirty = true
+                save()
+            }
+        }
 
         fun load(
             context: Context,

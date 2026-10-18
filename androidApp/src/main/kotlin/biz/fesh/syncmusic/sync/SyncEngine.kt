@@ -117,6 +117,8 @@ private class FolderState(val info: FolderInfo, val mapping: FolderMapping, val 
         localPath = display,
         enabled = mapping.enabled,
         message = message,
+        phonePath = mapping.localPath,
+        pcChoiceAt = mapping.pcChoiceAt,
     )
 }
 
@@ -217,14 +219,40 @@ private class Session(
             return finish(api, SyncPhase.ERROR, "Не вдалося отримати список папок: ${e.message}", Outcome.FAILED)
         }
         config.setFolders(folders)
+        val pcProblems = try {
+            withContext(Dispatchers.IO) { FolderMove.applyPcChoices(ctx, config, server.serverId, folders) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.w(TAG, "Applying folders chosen on the PC failed", e)
+            emptyMap()
+        }
         FolderMappings.ensure(ctx, config, folders)
         val volumes = Storage.volumes(ctx)
         states = folders.map { info ->
             val mapping = config.mappings.value[info.id] ?: FolderMapping()
-            FolderState(info, mapping, Storage.describe(volumes, mapping.localPath))
+            FolderState(info, mapping, Storage.describe(volumes, mapping.localPath)).also { it.message = pcProblems[info.id] }
         }
         Log.i(TAG, "Folders: ${folders.size} in ${elapsed()} ms")
+        reportStorage(api)
         return sync(api, server)
+    }
+
+    /** Tells the PC which storages and folders the phone has, for the folder picker in the PC app. */
+    private suspend fun reportStorage(api: Api) {
+        try {
+            withContext(Dispatchers.IO) {
+                val synced = config.mappings.value.values.mapNotNull { it.localPath }
+                val tree = Storage.tree(ctx, synced)
+                api.sendStorage(tree)
+                Log.i(TAG, "Storage reported: ${tree.volumes.sumOf { it.dirs.size }} folders after ${elapsed()} ms")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Older PC versions do not know this request; not needed for syncing.
+            Log.i(TAG, "Storage not reported: ${e.message}")
+        }
     }
 
     private suspend fun resolve(server: PairedServer, http: OkHttpClient, network: android.net.Network): Api? =

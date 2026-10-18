@@ -12,6 +12,7 @@ import biz.fesh.syncmusic.shared.Manifest
 import biz.fesh.syncmusic.shared.ManifestEntry
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PairResponse
+import biz.fesh.syncmusic.shared.PhoneStorage
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.ServerInfo
 import biz.fesh.syncmusic.shared.SyncProgress
@@ -246,6 +247,11 @@ class Api(
                 else -> throw IOException("HTTP ${r.code}")
             }
         }
+    }
+
+    fun sendStorage(storage: PhoneStorage) {
+        val body = Protocol.json.encodeToString(PhoneStorage.serializer(), storage).toRequestBody(jsonType)
+        http.newCall(request(url("api/phone/storage").build()).post(body).build()).execute().use { it.check() }
     }
 
     fun sendProgress(progress: SyncProgress) {

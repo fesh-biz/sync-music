@@ -172,6 +172,17 @@ private fun mirrorStatus(controller: AppController) {
                     // set-direction|<name>|TO_PHONE or TO_PC
                     "set-direction" -> folderByName(parts[1])?.let { controller.setDirection(it.id, Direction.valueOf(parts[2])) }
                     "remove-folder" -> folderByName(parts[1])?.let { controller.removeFolder(it.id) }
+                    // set-phone-folder|<name>|<absolute phone path>[|deleteOld] (for the first phone)
+                    "set-phone-folder" -> {
+                        val device = controller.settings.value.devices.firstOrNull()
+                        val folder = folderByName(parts[1])
+                        if (device != null && folder != null) {
+                            controller.setPhoneFolder(folder.id, device.id, parts[2], parts.getOrNull(3) == "true")
+                        }
+                    }
+                    // show-phone-picker|<name> / hide-phone-picker (screenshots of the dialog)
+                    "show-phone-picker" -> folderByName(parts[1])?.let { controller.openPhonePicker(it.id) }
+                    "hide-phone-picker" -> controller.closePhonePicker()
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()
                     "quit" -> {
@@ -199,6 +210,7 @@ private fun mirrorStatus(controller: AppController) {
                                     put("direction", info.direction.name)
                                     put("deleteMissing", info.deleteMissing)
                                     put("files", info.files)
+                                    folder?.phoneTargets?.values?.firstOrNull()?.let { put("phoneTarget", it.path) }
                                 },
                             )
                         }
@@ -214,6 +226,10 @@ private fun mirrorStatus(controller: AppController) {
                                 buildJsonObject {
                                     put("name", device.name)
                                     put("lastSeen", device.lastSeen)
+                                    controller.phoneStorage.value[device.id]?.let { storage ->
+                                        put("storageVolumes", storage.volumes.size)
+                                        put("storageDirs", storage.volumes.sumOf { it.dirs.size })
+                                    }
                                     if (live != null) put("progress", Protocol.json.encodeToJsonElement(SyncProgress.serializer(), live))
                                 },
                             )

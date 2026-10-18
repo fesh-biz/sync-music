@@ -61,6 +61,7 @@ import biz.fesh.syncmusic.desktop.SyncFolder
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.desktop.WindowsIntegration
 import biz.fesh.syncmusic.shared.FolderProgress
+import biz.fesh.syncmusic.shared.PhoneStorage
 import biz.fesh.syncmusic.shared.Format
 import biz.fesh.syncmusic.shared.SyncPhase
 import biz.fesh.syncmusic.shared.SyncProgress
@@ -76,6 +77,8 @@ fun App(controller: AppController) {
     val pin by controller.pin.collectAsState()
     val live by controller.live.collectAsState()
     val serverState by controller.serverState.collectAsState()
+    val phonePicker by controller.phonePicker.collectAsState()
+    val phoneStorage by controller.phoneStorage.collectAsState()
     // Network adapters are enumerated in the background: on Windows with WSL/Hyper-V/VPN adapters
     // this can take seconds and must never block the window.
     val loadedAddresses by controller.addresses.collectAsState()
@@ -89,7 +92,7 @@ fun App(controller: AppController) {
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 Header(serverState, addresses, addressesLoading, settings.port)
-                FoldersCard(settings, runtimeVersion, controller)
+                FoldersCard(settings, runtimeVersion, live, phoneStorage, controller)
                 if (settings.devices.isEmpty()) {
                     ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
                     DevicesSection(settings, live, controller)
@@ -104,6 +107,7 @@ fun App(controller: AppController) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            phonePicker?.let { PhoneFolderDialog(it, controller) }
         }
     }
 }
@@ -177,20 +181,32 @@ private fun Muted(text: String, maxLines: Int = Int.MAX_VALUE) {
 // ---------------------------------------------------------------- folders
 
 @Composable
-private fun FoldersCard(settings: Settings, runtimeVersion: Int, controller: AppController) {
+private fun FoldersCard(
+    settings: Settings,
+    runtimeVersion: Int,
+    live: Map<String, LiveStatus>,
+    phoneStorage: Map<String, PhoneStorage>,
+    controller: AppController,
+) {
     var error by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<SyncFolder?>(null) }
     SectionCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 CardTitle("Папки для синхронізації")
-                Muted("Синхронізуються всі файли зі збереженням структури папок. Папку на телефоні для кожної з них вибирають у застосунку.")
+                Muted("Синхронізуються всі файли зі збереженням структури папок. Папку на телефоні можна вибрати тут або в застосунку на телефоні.")
             }
             Spacer(Modifier.width(12.dp))
             OutlinedButton(onClick = controller::rescan) { Text("Оновити") }
             Spacer(Modifier.width(10.dp))
             Button(onClick = {
-                chooseFolder(settings.folders.lastOrNull()?.path)?.let { path -> error = controller.addFolder(path) }
+                chooseFolder(settings.folders.lastOrNull()?.path)?.let { path ->
+                    error = controller.addFolder(path)
+                    // Right away: where it goes on the phone (only possible once a phone is connected).
+                    if (error == null && controller.settings.value.devices.isNotEmpty()) {
+                        controller.settings.value.folders.lastOrNull()?.let { controller.openPhonePicker(it.id) }
+                    }
+                }
             }) { Text("Додати папку") }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
@@ -200,7 +216,7 @@ private fun FoldersCard(settings: Settings, runtimeVersion: Int, controller: App
         settings.folders.forEachIndexed { index, folder ->
             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             key(folder.id, runtimeVersion) {
-                FolderRow(folder, controller, onRemove = { removing = folder })
+                FolderRow(folder, settings.devices, live, phoneStorage, controller, onRemove = { removing = folder })
             }
         }
     }
@@ -224,7 +240,14 @@ private fun FoldersCard(settings: Settings, runtimeVersion: Int, controller: App
 private val emptyStats = kotlinx.coroutines.flow.MutableStateFlow(LibraryStats())
 
 @Composable
-private fun FolderRow(folder: SyncFolder, controller: AppController, onRemove: () -> Unit) {
+private fun FolderRow(
+    folder: SyncFolder,
+    devices: List<PairedDevice>,
+    live: Map<String, LiveStatus>,
+    phoneStorage: Map<String, PhoneStorage>,
+    controller: AppController,
+    onRemove: () -> Unit,
+) {
     val stats by (controller.runtime(folder.id)?.library?.stats ?: emptyStats).collectAsState()
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -264,11 +287,54 @@ private fun FolderRow(folder: SyncFolder, controller: AppController, onRemove: (
             }
             TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
         }
+        val source = SyncProgressSource { d -> live[d.id]?.progress ?: d.lastProgress }
+        devices.sortedByDescending { it.lastSeen }.forEach { device ->
+            PhoneFolderLine(folder, device, devices.size > 1, source, phoneStorage[device.id]) {
+                controller.openPhonePicker(folder.id, device.id)
+            }
+        }
+    }
+}
+
+/** "На телефоні: Пам'ять телефона › Music/Sync Music   Змінити" */
+@Composable
+private fun PhoneFolderLine(
+    folder: SyncFolder,
+    device: PairedDevice,
+    showName: Boolean,
+    source: SyncProgressSource,
+    storage: PhoneStorage?,
+    onChange: () -> Unit,
+) {
+    val progress = PhoneFolders.progressOf(device, source, folder.id)
+    val target = folder.phoneTargets[device.id]
+    val pending = PhoneFolders.pending(target, progress)
+    val path = PhoneFolders.currentPath(target, progress)
+    val toPhone = folder.direction == Direction.TO_PHONE
+    val (text, color) = when {
+        path == null && toPhone -> "ще не вибрано — телефон покладе файли в «Sync Music/${folder.name}»" to MaterialTheme.colorScheme.onSurfaceVariant
+        path == null -> "не вибрано, яку папку телефона надсилати" to Palette.Amber
+        pending -> PhoneFolders.describe(storage, path.orEmpty()) + " · застосується під час наступної синхронізації" to Palette.Amber
+        else -> (progress?.localPath ?: PhoneFolders.describe(storage, path.orEmpty())) to MaterialTheme.colorScheme.onSurface
+    }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (showName) "${device.name}:" else "На телефоні:",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        TextButton(onClick = onChange) { Text(if (path == null) "Вибрати папку" else "Змінити") }
     }
 }
 
 @Composable
-private fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
+internal fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp),
     ) {
