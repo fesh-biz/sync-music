@@ -303,8 +303,10 @@ def type_into(edit_index, value):
             disable_ime()
         nodes = edit_fields()
         if len(nodes) <= edit_index:
-            typing_log(f"{value!r}: no text field #{edit_index}")
-            return False
+            # The screen dump fails while a system dialog ("System UI isn't responding") is up.
+            typing_log(f"{value!r}, attempt {attempt + 1}: no text field #{edit_index} on screen yet")
+            time.sleep(3)
+            continue
         tap(nodes[edit_index])
         if attempt < 2:
             for _ in range(10):
