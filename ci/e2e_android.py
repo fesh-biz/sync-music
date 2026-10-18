@@ -999,9 +999,16 @@ def scenario_sd_card():
     check("Folder picker opened", wait_for("Вибрати цю папку", 15, scroll=False) is not None)
     check("SD card offered in the picker", tap_text("SD-карта", 15))
     shot("11-picker-sd")
-    tap_text("Нова папка", 10)
-    type_into(0, "Music")
-    tap_text("Створити", 10)
+    created = False
+    for attempt in range(3):
+        tap_text("Нова папка", 10)
+        type_into(0, "Music")
+        # After slow typing the dialog may already be gone (hiding the keyboard closes it): open it again.
+        if tap_text("Створити", 10):
+            created = True
+            break
+        typing_log(f"'Створити' not on screen after typing (attempt {attempt + 1}), opening the dialog again")
+    check("Music folder created on the SD card", created)
     shot("12-picker-sd-music")
     tap_text("Вибрати цю папку", 10)
     check("Move dialog", wait_for("Перенести", 10, scroll=False) is not None)
