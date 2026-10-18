@@ -27,6 +27,7 @@ import java.net.URI
 import javax.imageio.ImageIO
 import java.lang.management.ManagementFactory
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.SyncProgress
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -171,6 +172,8 @@ private fun mirrorStatus(controller: AppController) {
                     "set-delete" -> folderByName(parts[1])?.let { controller.setDeleteMissing(it.id, parts[2].toBoolean()) }
                     // set-direction|<name>|TO_PHONE or TO_PC
                     "set-direction" -> folderByName(parts[1])?.let { controller.setDirection(it.id, Direction.valueOf(parts[2])) }
+                    // set-file-types|<name>|ALL, MUSIC or MOVIES
+                    "set-file-types" -> folderByName(parts[1])?.let { controller.setFileTypes(it.id, FileTypes.valueOf(parts[2])) }
                     "remove-folder" -> folderByName(parts[1])?.let { controller.removeFolder(it.id) }
                     // set-phone-folder|<name>|<absolute phone path>[|deleteOld] (for the first phone)
                     "set-phone-folder" -> {
@@ -209,6 +212,7 @@ private fun mirrorStatus(controller: AppController) {
                                     put("path", folder?.path)
                                     put("direction", info.direction.name)
                                     put("deleteMissing", info.deleteMissing)
+                                    put("fileTypes", info.fileTypes.name)
                                     put("files", info.files)
                                     folder?.phoneTargets?.values?.firstOrNull()?.let { put("phoneTarget", it.path) }
                                 },

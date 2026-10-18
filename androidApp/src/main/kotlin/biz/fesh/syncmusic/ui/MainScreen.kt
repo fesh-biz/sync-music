@@ -84,6 +84,7 @@ import biz.fesh.syncmusic.net.Http
 import biz.fesh.syncmusic.net.PairingException
 import biz.fesh.syncmusic.net.WifiNet
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.FolderProgress
 import biz.fesh.syncmusic.shared.Format
@@ -786,8 +787,13 @@ private fun FolderRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(folder.name, style = MaterialTheme.typography.titleSmall)
+                val types = when (folder.fileTypes) {
+                    FileTypes.ALL -> ""
+                    FileTypes.MUSIC -> " · лише музика"
+                    FileTypes.MOVIES -> " · лише фільми"
+                }
                 Text(
-                    if (toPhone) "З комп'ютера на телефон" else "З телефона на комп'ютер",
+                    (if (toPhone) "З комп'ютера на телефон" else "З телефона на комп'ютер") + types,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )

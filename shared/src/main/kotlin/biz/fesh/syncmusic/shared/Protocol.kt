@@ -39,6 +39,9 @@ object Protocol {
         return fileName.lowercase() !in junk
     }
 
+    /** [isSyncable] and of the kind the folder syncs ([FileTypes]). */
+    fun isSyncable(fileName: String, types: FileTypes): Boolean = isSyncable(fileName) && types.matches(fileName)
+
     /** Folder names that are never descended into. */
     fun isSyncableDir(dirName: String): Boolean =
         !dirName.startsWith(".") && !dirName.equals("\$RECYCLE.BIN", ignoreCase = true) &&
@@ -101,6 +104,42 @@ enum class Direction {
     TO_PC,
 }
 
+/** Which files of a folder are synced. */
+@Serializable
+enum class FileTypes {
+    ALL,
+
+    /** Audio files, playlists, cue sheets and lyrics. */
+    MUSIC,
+
+    /** Video files and subtitles. */
+    MOVIES,
+    ;
+
+    fun matches(fileName: String): Boolean {
+        if (this == ALL) return true
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return when (this) {
+            MUSIC -> ext in MUSIC_EXTENSIONS
+            MOVIES -> ext in MOVIE_EXTENSIONS
+            ALL -> true
+        }
+    }
+
+    companion object {
+        val MUSIC_EXTENSIONS = setOf(
+            "mp3", "flac", "m4a", "m4b", "aac", "ogg", "oga", "opus", "wav", "wma", "aif", "aiff", "aifc", "alac",
+            "ape", "wv", "mpc", "tta", "mka", "dsf", "dff", "mid", "midi", "amr",
+            "m3u", "m3u8", "pls", "cue", "lrc",
+        )
+        val MOVIE_EXTENSIONS = setOf(
+            "mp4", "m4v", "mkv", "avi", "mov", "wmv", "webm", "flv", "mpg", "mpeg", "mpe", "m2v", "ts", "m2ts", "mts",
+            "vob", "3gp", "3g2", "ogv", "divx", "rm", "rmvb", "asf",
+            "srt", "ass", "ssa", "sub", "idx", "vtt", "smi", "sup",
+        )
+    }
+}
+
 @Serializable
 data class FolderInfo(
     val id: String,
@@ -118,6 +157,8 @@ data class FolderInfo(
     val phonePathAt: Long = 0,
     /** PC → phone: if the files cannot be moved to [phonePath] (another storage), delete the copies in the old phone folder. */
     val phoneDeleteOld: Boolean = false,
+    /** Which files are synced (older PCs: all). The PC lists only these; the phone uploads only these. */
+    val fileTypes: FileTypes = FileTypes.ALL,
 )
 
 @Serializable

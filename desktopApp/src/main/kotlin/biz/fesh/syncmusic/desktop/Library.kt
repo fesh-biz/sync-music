@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.Manifest
 import biz.fesh.syncmusic.shared.ManifestEntry
 import biz.fesh.syncmusic.shared.Protocol
@@ -27,13 +28,14 @@ data class LibraryStats(
     val error: String? = null,
 )
 
-/** Scans the music folder and serves the manifest + file lookups. */
+/** Scans a synced folder (only the files of its [FileTypes]) and serves the manifest + file lookups. */
 class Library {
     private class Snapshot(
         val root: String,
         val entries: List<ManifestEntry>,
         val byPath: Map<String, File>,
         val scannedAt: Long,
+        val types: FileTypes,
     )
 
     private val mutex = Mutex()
@@ -44,6 +46,11 @@ class Library {
     @Volatile
     private var root: String? = null
 
+    /** Only these files are listed (and served). */
+    @Volatile
+    var fileTypes: FileTypes = FileTypes.ALL
+        private set
+
     private val _stats = MutableStateFlow(LibraryStats())
     val stats: StateFlow<LibraryStats> = _stats.asStateFlow()
 
@@ -53,11 +60,16 @@ class Library {
         _stats.value = LibraryStats(root = path)
     }
 
+    /** Changes the file filter; the next request rescans. */
+    fun setFileTypes(types: FileTypes) {
+        fileTypes = types
+    }
+
     fun fileFor(path: String): File? = snapshot?.byPath?.get(path)
 
     /** Forget the cached listing so the next request rescans (after the PC received a file). */
     fun invalidate() {
-        snapshot = snapshot?.let { Snapshot(it.root, it.entries, it.byPath, 0) }
+        snapshot = snapshot?.let { Snapshot(it.root, it.entries, it.byPath, 0, it.types) }
     }
 
     suspend fun manifest(serverId: String, maxAgeMs: Long = 5_000): Manifest {
@@ -75,20 +87,21 @@ class Library {
 
     private suspend fun ensureFresh(maxAgeMs: Long): Snapshot? = mutex.withLock {
         val currentRoot = root ?: return@withLock null
+        val types = fileTypes
         val existing = snapshot
-        if (existing != null && existing.root == currentRoot &&
+        if (existing != null && existing.root == currentRoot && existing.types == types &&
             System.currentTimeMillis() - existing.scannedAt <= maxAgeMs
         ) {
             return@withLock existing
         }
         _stats.value = _stats.value.copy(root = currentRoot, scanning = true)
         val started = System.currentTimeMillis()
-        val fresh = withContext(Dispatchers.IO) { scan(currentRoot) }
+        val fresh = withContext(Dispatchers.IO) { scan(currentRoot, types) }
         val previous = existing?.entries?.size
         if (previous != fresh.first.entries.size) {
             AppLog.i("Scanned ${fresh.first.entries.size} files in ${System.currentTimeMillis() - started} ms (was $previous)")
         }
-        if (root == currentRoot) {
+        if (root == currentRoot && fileTypes == types) {
             snapshot = fresh.first
             _stats.value = LibraryStats(
                 root = currentRoot,
@@ -102,10 +115,10 @@ class Library {
         fresh.first
     }
 
-    private fun scan(rootPath: String): Pair<Snapshot, String?> {
+    private fun scan(rootPath: String, types: FileTypes): Pair<Snapshot, String?> {
         val rootDir = File(rootPath)
         if (!rootDir.isDirectory) {
-            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis()) to "Папку не знайдено"
+            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis(), types) to "Папку не знайдено"
         }
         val rootNio = rootDir.toPath()
         val entries = ArrayList<ManifestEntry>()
@@ -123,7 +136,7 @@ class Library {
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
                     if (!attrs.isRegularFile) return FileVisitResult.CONTINUE
                     val name = file.fileName.toString()
-                    if (!Protocol.isSyncable(name)) return FileVisitResult.CONTINUE
+                    if (!Protocol.isSyncable(name, types)) return FileVisitResult.CONTINUE
                     val rel = rootNio.relativize(file).joinToString("/") { it.toString() }
                     entries += ManifestEntry(rel, attrs.size(), attrs.lastModifiedTime().toMillis())
                     byPath[rel] = file.toFile()
@@ -134,9 +147,9 @@ class Library {
             })
         } catch (t: Throwable) {
             AppLog.e("Scan failed for $rootPath", t)
-            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis()) to "Помилка читання папки: ${t.message}"
+            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis(), types) to "Помилка читання папки: ${t.message}"
         }
         entries.sortBy { it.path.lowercase() }
-        return Snapshot(rootPath, entries, byPath, System.currentTimeMillis()) to null
+        return Snapshot(rootPath, entries, byPath, System.currentTimeMillis(), types) to null
     }
 }

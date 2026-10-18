@@ -1,6 +1,7 @@
 package biz.fesh.syncmusic.desktop
 
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncProgress
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,8 @@ data class SyncFolder(
     val deleteMissing: Boolean = true,
     /** Phone folder chosen here in the PC app, per phone (device id). */
     val phoneTargets: Map<String, PhoneTarget> = emptyMap(),
+    /** Which files are synced: music, movies or all. */
+    val fileTypes: FileTypes = FileTypes.ALL,
 )
 
 /** A phone folder chosen in the PC app; the phone applies it on its next sync. */

@@ -2,6 +2,7 @@ package biz.fesh.syncmusic.desktop
 
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.ErrorResponse
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderList
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PairResponse
@@ -204,6 +205,13 @@ class SyncServer(private val app: AppController) {
                 val offset = params["offset"]?.toLongOrNull() ?: 0L
                 if (size == null || size < 0 || offset < 0 || offset > size) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("bad parameters"))
+                    return@put
+                }
+                val types = runtime.folder.fileTypes
+                if (!types.matches(path.substringAfterLast('/'))) {
+                    // Phones before the file filter send everything; the PC keeps only what the folder takes.
+                    val what = if (types == FileTypes.MUSIC) "музику" else "фільми"
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Папка «${runtime.folder.name}» приймає лише $what"))
                     return@put
                 }
                 if (offset > 0) AppLog.i("Upload resume $path from $offset")

@@ -1,6 +1,7 @@
 package biz.fesh.syncmusic.desktop
 
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PhoneStorage
@@ -175,10 +176,15 @@ class AppController {
             val existing = runtimes[folder.id]
             if (existing != null && existing.folder.path == folder.path) {
                 runtimes[folder.id] = FolderRuntime(folder, existing.library, existing.watcher)
+                if (existing.library.fileTypes != folder.fileTypes) {
+                    existing.library.setFileTypes(folder.fileTypes)
+                    scope.launch { existing.library.rescan() }
+                }
                 continue
             }
             existing?.watcher?.stop()
             val library = Library()
+            library.setFileTypes(folder.fileTypes)
             library.setRoot(folder.path)
             val watcher = FolderWatcher(scope) {
                 AppLog.i("Folder ${folder.name} changed, rescanning")
@@ -216,6 +222,7 @@ class AppController {
             phonePath = target?.path,
             phonePathAt = target?.at ?: 0,
             phoneDeleteOld = folder.direction == Direction.TO_PHONE && target?.deleteOld == true,
+            fileTypes = folder.fileTypes,
         )
     }
 
@@ -328,6 +335,13 @@ class AppController {
             s.copy(folders = s.folders.map { if (it.id == id && it.direction == Direction.TO_PHONE) it.copy(deleteMissing = value) else it })
         }
         syncRuntimes()
+    }
+
+    /** Music, movies or all files. PC → phone: with deleting on, the phone drops the files that no longer fit. */
+    fun setFileTypes(id: String, types: FileTypes) {
+        settings.update { s -> s.copy(folders = s.folders.map { if (it.id == id) it.copy(fileTypes = types) else it }) }
+        syncRuntimes()
+        AppLog.i("File types of $id: $types")
     }
 
     private fun sameFile(a: String, b: String): Boolean = try {

@@ -19,6 +19,7 @@ import biz.fesh.syncmusic.net.UnauthorizedException
 import biz.fesh.syncmusic.net.UploadResult
 import biz.fesh.syncmusic.net.WifiNet
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.FolderProgress
 import biz.fesh.syncmusic.shared.ManifestEntry
@@ -441,7 +442,11 @@ private class Session(
         if (plan.stale.isEmpty()) return
         if (plan.pcEmpty) {
             // Safety net: never wipe the phone because the PC reported an empty folder.
-            plan.state.message = "На комп'ютері папка порожня — видалення пропущено"
+            plan.state.message = if (plan.state.info.fileTypes == FileTypes.ALL) {
+                "На комп'ютері папка порожня — видалення пропущено"
+            } else {
+                "На комп'ютері в папці немає файлів вибраного типу — видалення пропущено"
+            }
             return
         }
         if (!plan.state.info.deleteMissing) {
@@ -568,7 +573,10 @@ private class Session(
             state.message = "Папку на телефоні не знайдено"
             return null
         }
-        val local = Storage.listLocal(root)
+        val all = Storage.listLocal(root)
+        // Only the kind of files the folder takes (music / movies / all), as set on the PC.
+        val types = state.info.fileTypes
+        val local = if (types == FileTypes.ALL) all else all.filter { types.matches(it.file.name) }
         val manifest = api.manifest(state.info.id)
         val onPc = manifest.files.associateBy { it.path }
         val db = SyncedDb.load(ctx, server.serverId, state.info.id, Direction.TO_PC, root.path, config.storageId.value)
@@ -607,7 +615,8 @@ private class Session(
         if (badNames > 0) state.message = "Пропущено ${badNames} файлів з назвами, недопустимими у Windows"
 
         // Files deleted on the phone stay on the PC: nothing is ever deleted there.
-        val localPaths = local.mapTo(HashSet()) { it.path }
+        // Records of files the filter skips stay: switching back to all files must not send them again.
+        val localPaths = all.mapTo(HashSet()) { it.path }
         db.paths.filter { it !in localPaths }.forEach(db::remove)
         uploads.sortBy { it.path.lowercase() }
         Log.i(TAG, "${state.info.name}: ${uploads.size} to upload")

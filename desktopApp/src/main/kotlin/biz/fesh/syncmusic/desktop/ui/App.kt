@@ -59,6 +59,7 @@ import biz.fesh.syncmusic.desktop.ServerState
 import biz.fesh.syncmusic.desktop.Settings
 import biz.fesh.syncmusic.desktop.SyncFolder
 import biz.fesh.syncmusic.shared.Direction
+import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.desktop.WindowsIntegration
 import biz.fesh.syncmusic.shared.FolderProgress
 import biz.fesh.syncmusic.shared.PhoneStorage
@@ -194,7 +195,7 @@ private fun FoldersCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 CardTitle("Папки для синхронізації")
-                Muted("Синхронізуються всі файли зі збереженням структури папок. Папку на телефоні можна вибрати тут або в застосунку на телефоні.")
+                Muted("Для кожної папки виберіть, що синхронізувати: музику, фільми або всі файли. Структура папок зберігається. Папку на телефоні можна вибрати тут або в застосунку на телефоні.")
             }
             Spacer(Modifier.width(12.dp))
             OutlinedButton(onClick = controller::rescan) { Text("Оновити") }
@@ -258,6 +259,7 @@ private fun FolderRow(
             Spacer(Modifier.width(12.dp))
             DirectionToggle(folder.direction) { controller.setDirection(folder.id, it) }
         }
+        FileTypesRow(folder, controller)
         Row(verticalAlignment = Alignment.CenterVertically) {
             val summary = when {
                 stats.error != null -> stats.error!!
@@ -333,13 +335,68 @@ private fun PhoneFolderLine(
     }
 }
 
+/** "Файли: [Музика] [Фільми] [Усі]" with what the choice takes. */
+@Composable
+private fun FileTypesRow(folder: SyncFolder, controller: AppController) {
+    var confirm by remember { mutableStateOf<FileTypes?>(null) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Файли:", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.width(10.dp))
+        FileTypesToggle(folder.fileTypes) { types ->
+            // Narrowing a mirrored PC → phone folder removes the other files from the phone: ask first.
+            if (folder.direction == Direction.TO_PHONE && folder.deleteMissing && types != FileTypes.ALL) {
+                confirm = types
+            } else {
+                controller.setFileTypes(folder.id, types)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f)) { Muted(Format.fileTypesHint(folder.fileTypes), maxLines = 2) }
+    }
+    confirm?.let { types ->
+        val what = if (types == FileTypes.MUSIC) "лише музику" else "лише фільми"
+        val other = if (types == FileTypes.MUSIC) "не є музикою" else "не є фільмами"
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("Синхронізувати $what?") },
+            text = {
+                Text(
+                    "Під час наступної синхронізації телефон видалить із папки «${folder.name}» файли, які $other " +
+                        "(лише ті, що потрапили туди з комп'ютера). На комп'ютері нічого не зміниться.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = null
+                    controller.setFileTypes(folder.id, types)
+                }) { Text("Так, $what") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Скасувати") } },
+        )
+    }
+}
+
+@Composable
+internal fun FileTypesToggle(types: FileTypes, onChange: (FileTypes) -> Unit) {
+    Segmented(
+        listOf(FileTypes.MUSIC to "Музика", FileTypes.MOVIES to "Фільми", FileTypes.ALL to "Усі"),
+        types,
+        onChange,
+    )
+}
+
 @Composable
 internal fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
+    Segmented(listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК"), direction, onChange)
+}
+
+@Composable
+private fun <T> Segmented(options: List<Pair<T, String>>, current: T, onChange: (T) -> Unit) {
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp),
     ) {
-        for ((value, label) in listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК")) {
-            val selected = value == direction
+        for ((value, label) in options) {
+            val selected = value == current
             Box(
                 Modifier
                     .clip(RoundedCornerShape(50))

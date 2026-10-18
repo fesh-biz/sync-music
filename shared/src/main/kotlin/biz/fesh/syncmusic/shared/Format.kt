@@ -45,6 +45,20 @@ object Format {
     fun filesGenitive(n: Long): String = "${number(n)} ${plural(n, "файлу", "файлів", "файлів")}"
     fun filesGenitive(n: Int): String = filesGenitive(n.toLong())
 
+    /** Short name of a file filter: "Музика", "Фільми", "Усі файли". */
+    fun fileTypes(types: FileTypes): String = when (types) {
+        FileTypes.ALL -> "Усі файли"
+        FileTypes.MUSIC -> "Музика"
+        FileTypes.MOVIES -> "Фільми"
+    }
+
+    /** What a file filter takes, for hints. */
+    fun fileTypesHint(types: FileTypes): String = when (types) {
+        FileTypes.ALL -> "Синхронізуються всі файли (крім прихованих і системних)"
+        FileTypes.MUSIC -> "Лише музика: mp3, flac, m4a, ogg, opus, wav, wma… а також плейлисти (m3u, pls, cue) і тексти пісень (lrc)"
+        FileTypes.MOVIES -> "Лише фільми: mp4, mkv, avi, mov, wmv, webm, ts… а також субтитри (srt, ass, sub, vtt)"
+    }
+
     fun duration(seconds: Long): String = when {
         seconds < 60 -> "менше хвилини"
         seconds < 3600 -> "${seconds / 60} хв"

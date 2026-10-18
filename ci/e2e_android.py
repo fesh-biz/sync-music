@@ -32,6 +32,8 @@ CAMERA_PC = WORK / "pc-camera"                 # phone -> PC folder on the PC
 CAMERA_PHONE = "/sdcard/DCIM/TestCam"
 DOCS = WORK / "docs"                           # second PC -> phone folder
 DOCS_PHONE = "/sdcard/Sync Music/docs"
+MEDIA = WORK / "media"                         # PC -> phone folder for the file type filter
+MEDIA_PHONE = "/sdcard/Sync Music/media"
 PKG = "biz.fesh.syncmusic"
 ACTIVITY = f"{PKG}/.ui.MainActivity"
 PHONE_ROOT = "/sdcard/Music/Sync Music"
@@ -758,6 +760,80 @@ def scenario_pc_picks_phone_folder():
     shot("22-docs-moved")
 
 
+def wait_pc_folder(name, files, timeout=20):
+    """Waits until the PC lists [files] files in the folder (after a rescan); returns its status entry."""
+    end = time.time() + timeout
+    folder = {}
+    while time.time() < end:
+        folder = next((f for f in status().get("folders") or [] if f.get("name") == name), {})
+        if folder.get("files") == files:
+            break
+        time.sleep(0.5)
+    return folder
+
+
+def scenario_file_types():
+    """Music / movies / all files: the PC lists only the chosen kind, the phone mirrors that
+    (dropping what no longer fits) and uploads only that kind from a phone -> PC folder."""
+    music = {"Альбом/01 Пісня.mp3", "Альбом/02 Пісня.flac", "Альбом/Плейлист.m3u"}
+    movies = {"Фільми/Фільм.mkv", "Фільми/Фільм.srt", "Фільми/Кліп.MP4"}
+    other = {"Альбом/cover.jpg", "readme.txt"}
+    for i, rel in enumerate(sorted(music | movies | other)):
+        write_file(MEDIA / rel, 30_000 + i * 7_001)
+    pc_command(f"add-folder|{MEDIA}|TO_PHONE")
+    pc_command(f"set-file-types|{MEDIA.name}|MUSIC")
+    folder = wait_pc_folder(MEDIA.name, len(music))
+    check("PC lists only music", folder.get("fileTypes") == "MUSIC" and folder.get("files") == len(music), folder)
+    shot("23-file-types-music")
+
+    def phone_set():
+        return {k for k in phone_files(MEDIA_PHONE) if not any(p.startswith(".") for p in k.split("/"))}
+
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("only music", None, since)
+    got = phone_set()
+    check("Phone got only the music", got == music, sorted(got))
+
+    pc_command(f"set-file-types|{MEDIA.name}|MOVIES")
+    folder = wait_pc_folder(MEDIA.name, len(movies))
+    check("PC lists only movies", folder.get("fileTypes") == "MOVIES" and folder.get("files") == len(movies), folder)
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("only movies", None, since)
+    got = phone_set()
+    check("Phone got the movies and dropped the music (mirror)", got == movies, sorted(got))
+
+    pc_command(f"set-file-types|{MEDIA.name}|ALL")
+    wait_pc_folder(MEDIA.name, len(music | movies | other))
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("all files again", None, since)
+    verify_phone("all files after the filter", root=MEDIA_PHONE, pc_root=MEDIA)
+    pc_command(f"remove-folder|{MEDIA.name}")
+
+    # Phone -> PC: only movies are sent; a photo waits until the filter allows it.
+    if pc_folder_files(CAMERA_PC.name) is None:
+        skip("File filter for a phone -> PC folder", "no phone -> PC folder")
+        return
+    pc_command(f"set-file-types|{CAMERA_PC.name}|MOVIES")
+    src = WORK / "cam-filter"
+    write_file(src / "IMG_0200.jpg", 45_000)
+    write_file(src / "Кліп.mp4", 90_000)
+    adb("push", str(src), CAMERA_PHONE + "/filter", timeout=120)
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("phone -> PC, only movies", None, since)
+    shot("24-file-types-camera")
+    check("Video sent to the PC", (CAMERA_PC / "filter/Кліп.mp4").is_file())
+    check("Photo not sent while the folder takes only movies", not (CAMERA_PC / "filter/IMG_0200.jpg").exists())
+    pc_command(f"set-file-types|{CAMERA_PC.name}|ALL")
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("phone -> PC, all files again", None, since)
+    check("Photo sent once all files are allowed", (CAMERA_PC / "filter/IMG_0200.jpg").is_file())
+
+
 def scenario_pc_delete():
     files = expected_files()
     victims = sorted(files)[:2]
@@ -1002,7 +1078,7 @@ def main():
         since = pair()
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
-                         scenario_camera, scenario_docs, scenario_pc_picks_phone_folder, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
+                         scenario_camera, scenario_docs, scenario_pc_picks_phone_folder, scenario_file_types, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
                          scenario_remove_folder, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:
                 check(f"{scenario.__name__} not run: e2e time budget used up", False)
