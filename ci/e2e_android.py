@@ -262,35 +262,71 @@ def restore_ime():
         sh(f"ime set {ime}")
 
 
+def typing_log(text):
+    print("typing: " + text, flush=True)
+    try:
+        with open(OUT / "typing.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {text}\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def key_by_key(value):
+    """One key event per character: needs no input connection, so it also works when the
+    on-screen keyboard is off or not attached to the field yet (slow emulator)."""
+    codes = []
+    for ch in value:
+        if ch.isdigit():
+            codes.append(f"KEYCODE_{ch}")
+        elif ch == ".":
+            codes.append("KEYCODE_PERIOD")
+        elif ch.isascii() and ch.isalpha() and ch.islower():
+            codes.append(f"KEYCODE_{ch.upper()}")
+        else:
+            if codes:
+                sh("input keyevent " + " ".join(codes))
+                codes = []
+            sh(f"input text {q(ch)}")
+    if codes:
+        sh("input keyevent " + " ".join(codes))
+
+
 def type_into(edit_index, value):
     """Types into a text field and checks that the text really arrived: right after the tap the
     keyboard may not be connected to the field yet, and then `input text` is silently lost."""
     typed = False
-    for attempt in range(5):
-        if attempt == 3:
+    for attempt in range(6):
+        if attempt == 2:
             # The on-screen keyboard keeps swallowing the keys: switch it off, so the key events
             # go straight to the focused field (the app handles hardware-keyboard input).
-            print("typing: disabling the on-screen keyboard", flush=True)
+            typing_log("disabling the on-screen keyboard")
             disable_ime()
         nodes = edit_fields()
         if len(nodes) <= edit_index:
+            typing_log(f"{value!r}: no text field #{edit_index}")
             return False
         tap(nodes[edit_index])
-        for _ in range(10):
-            if "mInputShown=true" in sh("dumpsys input_method"):
-                break
-            time.sleep(0.5)
-        time.sleep(0.5 + attempt)
+        if attempt < 2:
+            for _ in range(10):
+                if "mInputShown=true" in sh("dumpsys input_method"):
+                    break
+                time.sleep(0.5)
+        time.sleep(1.0 + attempt)
+        focused = [n for n in edit_fields() if n.get("focused") == "true"]
         sh("input keyevent KEYCODE_MOVE_END")
         sh("input keyevent " + " ".join(["KEYCODE_DEL"] * 14))
-        sh(f"input text {value}")
-        time.sleep(0.8)
+        if attempt % 2 == 0:
+            sh(f"input text {q(value)}")
+        else:
+            key_by_key(value)
+        time.sleep(1.0)
         nodes = edit_fields()
         got = (nodes[edit_index].get("text") or "") if len(nodes) > edit_index else ""
         if value in got:
             typed = True
+            typing_log(f"{value!r}: ok on attempt {attempt + 1}")
             break
-        print(f"typing {value!r}, attempt {attempt + 1}: the field shows {got!r}", flush=True)
+        typing_log(f"{value!r}, attempt {attempt + 1}: the field shows {got!r}, focused fields={len(focused)}")
     restore_ime()
     if not typed:
         print(f"typing {value!r} failed", flush=True)
