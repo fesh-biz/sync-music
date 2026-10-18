@@ -589,7 +589,10 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
                 Muted("Зараз: ${progress.currentFile}", maxLines = 1)
             }
             val message = progress.message
-            if (message != null && (progress.phase == SyncPhase.ERROR || progress.phase == SyncPhase.STOPPED)) {
+            if (progress.paused) {
+                Text("Призупинено на телефоні. Продовжити можна кнопкою «Продовжити синхронізацію» в застосунку на телефоні.",
+                    color = Palette.Amber, style = MaterialTheme.typography.bodyMedium)
+            } else if (message != null && (progress.phase == SyncPhase.ERROR || progress.phase == SyncPhase.STOPPED)) {
                 Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -664,7 +667,7 @@ private fun statusLine(progress: SyncProgress?, syncing: Boolean, lastSeen: Long
     val seen = "останній зв'язок ${Format.moment(lastSeen, now)}"
     return when (progress?.phase) {
         SyncPhase.ERROR -> "Помилка синхронізації · $seen"
-        SyncPhase.STOPPED -> "Синхронізацію перервано, продовжиться автоматично · $seen"
+        SyncPhase.STOPPED -> if (progress.paused) "Синхронізацію призупинено на телефоні · $seen" else "Синхронізацію перервано, продовжиться автоматично · $seen"
         else -> seen.replaceFirstChar { it.uppercase() }
     }
 }

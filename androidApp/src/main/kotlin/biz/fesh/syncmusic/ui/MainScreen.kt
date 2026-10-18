@@ -139,6 +139,7 @@ fun MainScreen() {
     val engine by SyncEngine.state.collectAsState()
     val lastSync by config.lastSync.collectAsState()
     val autoSync by config.autoSync.collectAsState()
+    val paused by config.paused.collectAsState()
     val folders by config.folders.collectAsState()
     val mappings by config.mappings.collectAsState()
     var perms by remember { mutableStateOf(Perms.read(context)) }
@@ -216,7 +217,7 @@ fun MainScreen() {
                     if (current.apkVersionCode > BuildConfig.VERSION_CODE) {
                         item { UpdateCard(current) }
                     }
-                    item { StatusCard(current, engine, lastSync, perms.storage) }
+                    item { StatusCard(current, engine, lastSync, perms.storage, paused) }
                     item {
                         FoldersCard(
                             config = config,
@@ -560,6 +561,7 @@ private fun StatusCard(
     engine: EngineState,
     lastSync: LastSync?,
     hasStorage: Boolean,
+    paused: Boolean,
 ) {
     val context = LocalContext.current
     val now by produceState(System.currentTimeMillis()) {
@@ -582,7 +584,7 @@ private fun StatusCard(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(server.serverName, style = MaterialTheme.typography.titleMedium)
-                Muted(statusText(running, progress, lastSync, now), maxLines = 2)
+                Muted(statusText(running, paused, progress, lastSync, now), maxLines = 2)
             }
         }
 
@@ -607,7 +609,7 @@ private fun StatusCard(
                     if (progress.remainingFiles == 0) "усе на місці" else Format.bytes(progress.remainingBytes),
                 )
             }
-            if (running && (progress.phase == SyncPhase.DOWNLOADING || progress.phase == SyncPhase.UPLOADING)) {
+            if (running && !paused && (progress.phase == SyncPhase.DOWNLOADING || progress.phase == SyncPhase.UPLOADING)) {
                 val file = progress.currentFile?.substringAfterLast('/')
                 if (file != null) Muted((if (progress.phase == SyncPhase.UPLOADING) "Надсилається: " else "Отримується: ") + file, maxLines = 1)
                 val eta = Format.eta(progress.remainingBytes, progress.bytesPerSecond)
@@ -615,21 +617,35 @@ private fun StatusCard(
             }
         }
 
-        if (!running) {
+        if (!running && !paused) {
             engine.note?.let { Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium) }
         }
+        if (paused) {
+            Muted("Поки синхронізацію призупинено, вона не запускається ні автоматично, ні під час відкриття застосунку. " +
+                "Недокачаний файл продовжить завантажуватися з того самого місця.")
+        }
 
-        Button(
-            onClick = { SyncWorker.syncNow(context) },
-            enabled = !running && hasStorage,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (running) "Триває синхронізація…" else "Синхронізувати зараз")
+        when {
+            paused -> Button(
+                onClick = { SyncEngine.resume(context) },
+                enabled = hasStorage,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Продовжити синхронізацію") }
+            running -> OutlinedButton(
+                onClick = { SyncEngine.pause(context) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Пауза") }
+            else -> Button(
+                onClick = { SyncWorker.syncNow(context) },
+                enabled = hasStorage,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Синхронізувати зараз") }
         }
     }
 }
 
-private fun statusText(running: Boolean, progress: SyncProgress?, lastSync: LastSync?, now: Long): String {
+private fun statusText(running: Boolean, paused: Boolean, progress: SyncProgress?, lastSync: LastSync?, now: Long): String {
+    if (paused) return if (running) "Призупинення…" else "Синхронізацію призупинено"
     if (running) {
         return when (progress?.phase) {
             null, SyncPhase.CONNECTING -> "Підключення до комп'ютера…"

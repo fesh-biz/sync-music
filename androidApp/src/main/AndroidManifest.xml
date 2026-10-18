@@ -43,6 +43,11 @@
             </intent-filter>
         </activity>
 
+        <!-- "Пауза" / "Продовжити" in the notifications. -->
+        <receiver
+            android:name=".SyncActionReceiver"
+            android:exported="false" />
+
         <!-- WorkManager runs long syncs as a foreground service of type dataSync. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

@@ -495,7 +495,8 @@ def trigger_sync():
     to_top()
     if not tap_text("Синхронізувати зараз", timeout=20):
         # A sync may be running already (button shows a different label).
-        return find("Триває синхронізація") is not None
+        # (older versions without pausing: "Триває синхронізація…")
+        return find("Пауза") is not None or find("Триває синхронізація") is not None
     return True
 
 
@@ -576,7 +577,7 @@ def pair():
     tap_text("Підключити", 10)
     paired = wait_for("Синхронізувати зараз", 30)
     if paired is None:
-        paired = wait_for("Триває синхронізація", 5)
+        paired = wait_for("Пауза", 5) or find("Триває синхронізація")
     check("Paired with correct code", paired is not None, f"pin={pin}")
     shot("04-paired")
     if paired is None:
@@ -935,6 +936,63 @@ def scenario_resume():
     wait_sync_done("big file removed", len(expected_files()), since)
 
 
+def part_bytes():
+    out = sh(f"ls -l {q(PHONE_ROOT + '/.syncmusic')} 2>/dev/null | grep part")
+    m = re.search(r"\s(\d{6,})\s", out)
+    return int(m.group(1)) if m else 0
+
+
+def scenario_pause():
+    """'Пауза' stops the sync and keeps it stopped (even when the app is opened); 'Продовжити' resumes the file."""
+    big = MUSIC / "Big" / "pause.flac"
+    write_file(big, 200 * 1024 * 1024, seed="pause")
+    time.sleep(3)
+    pc_command("rescan")
+    since = time.time()
+    trigger_sync()
+    t0 = time.time()
+    while time.time() - t0 < 120 and part_bytes() < 15 * 1024 * 1024:
+        time.sleep(0.3)
+    if part_bytes() == 0:
+        skip("Pause and resume", "download finished before it could be paused")
+        wait_sync_done("pause file", len(expected_files()), since)
+    else:
+        tapped = tap_text("Пауза", timeout=10)
+        check("Pause button is shown during a sync", tapped)
+        t0 = time.time()
+        p = {}
+        while time.time() - t0 < 30:
+            p = device_progress()
+            if p.get("paused"):
+                break
+            time.sleep(0.5)
+        check("Phone reports the sync as paused", p.get("paused") is True and p.get("phase") == "STOPPED",
+              f"phase={p.get('phase')} paused={p.get('paused')} msg={p.get('message')}")
+        shot("08c-paused")
+        kept = part_bytes()
+        time.sleep(6)
+        check("Nothing downloads while paused", kept > 0 and part_bytes() == kept, f"{kept} -> {part_bytes()}")
+        # Opening the app must not resume it.
+        adb("shell", "am", "force-stop", PKG)
+        time.sleep(1)
+        adb("shell", "am", "start", "-n", ACTIVITY)
+        time.sleep(8)
+        check("Pause survives reopening the app", part_bytes() == kept and find("Продовжити синхронізацію") is not None,
+              f"part {kept} -> {part_bytes()}")
+        since = time.time()
+        check("Resume button works", tap_text("Продовжити синхронізацію", timeout=20))
+        wait_sync_done("after pause", len(expected_files()), since, timeout=300)
+        log = (DATA / "syncmusic.log").read_text(encoding="utf-8", errors="replace")
+        check("Resumed from where it was paused (HTTP Range)", "Resume Big/pause.flac from bytes=" in log)
+    verify_phone("after pause")
+    big.unlink()
+    shutil.rmtree(MUSIC / "Big")
+    time.sleep(3)
+    since = time.time()
+    trigger_sync()
+    wait_sync_done("pause file removed", len(expected_files()), since)
+
+
 def scenario_scale():
     n_dirs, per_dir = 2800, 10
     scale = WORK / "scale-staging"
@@ -1096,7 +1154,7 @@ def main():
         device_setup()
         since = pair()
         scenario_initial(since)
-        for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume,
+        for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume, scenario_pause,
                          scenario_camera, scenario_docs, scenario_pc_picks_phone_folder, scenario_file_types, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
                          scenario_remove_folder, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:

@@ -300,6 +300,8 @@ data class SyncProgress(
     val folders: List<FolderProgress> = emptyList(),
     val appVersionCode: Int = 0,
     val timestamp: Long = 0,
+    /** Paused on the phone ([SyncPhase.STOPPED]); it does not sync until resumed there. */
+    val paused: Boolean = false,
 ) {
     val remainingFiles: Int get() = (totalFiles - syncedFiles).coerceAtLeast(0)
     val remainingBytes: Long get() = (totalBytes - syncedBytes).coerceAtLeast(0)

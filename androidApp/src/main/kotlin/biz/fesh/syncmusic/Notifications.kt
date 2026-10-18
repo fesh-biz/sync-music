@@ -22,6 +22,7 @@ object Notifications {
     private const val CHANNEL_DONE = "sync_done"
     const val ID_PROGRESS = 1001
     private const val ID_DONE = 1002
+    private const val ID_PAUSED = 1003
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -56,6 +57,7 @@ object Notifications {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openApp(context))
+            .addAction(R.drawable.ic_stat_sync, "Пауза", SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_PAUSE))
         if (progress == null || progress.totalFiles == 0) {
             builder.setContentText("Підключення до комп'ютера…").setProgress(0, 0, true)
         } else {
@@ -94,6 +96,38 @@ object Notifications {
     fun cancelProgress(context: Context) {
         try {
             NotificationManagerCompat.from(context).cancel(ID_PROGRESS)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** "Синхронізацію призупинено" with a "Продовжити" button; stays until resumed. */
+    @SuppressLint("MissingPermission")
+    fun showPaused(context: Context, progress: SyncProgress) {
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+        val text = if (progress.totalFiles > 0) {
+            "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · " +
+                "залишилось ${Format.bytes(progress.remainingBytes)}"
+        } else {
+            "Не синхронізується, доки ви не продовжите"
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_DONE)
+            .setSmallIcon(R.drawable.ic_stat_sync)
+            .setContentTitle("Синхронізацію призупинено")
+            .setContentText(text)
+            .setSilent(true)
+            .setContentIntent(openApp(context))
+            .addAction(R.drawable.ic_stat_sync, "Продовжити", SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_RESUME))
+            .build()
+        try {
+            nm.notify(ID_PAUSED, notification)
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun cancelPaused(context: Context) {
+        try {
+            NotificationManagerCompat.from(context).cancel(ID_PAUSED)
         } catch (_: Throwable) {
         }
     }

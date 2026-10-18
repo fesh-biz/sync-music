@@ -21,7 +21,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     override suspend fun doWork(): Result {
         val manual = inputData.getBoolean(KEY_MANUAL, false)
-        val outcome = SyncEngine.run(applicationContext, manual) {
+        val resume = inputData.getBoolean(KEY_RESUME, false)
+        val outcome = SyncEngine.run(applicationContext, manual, goForeground = {
             try {
                 setForeground(getForegroundInfo())
             } catch (t: Throwable) {
@@ -29,7 +30,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 // the sync still runs, it just may be cut short and will resume next time.
                 Log.w(TAG, "setForeground failed", t)
             }
-        }
+        }, waitForLock = resume)
         Log.i(TAG, "Sync finished: $outcome")
         return Result.success()
     }
@@ -40,6 +41,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     companion object {
         private const val TAG = "SyncWorker"
         private const val KEY_MANUAL = "manual"
+        private const val KEY_RESUME = "resume"
         private const val PERIODIC = "periodic-sync"
         private const val NOW = "sync-now"
 
@@ -61,6 +63,15 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
+        }
+
+        /** After a pause: runs once the paused run has ended (it may still be finishing). */
+        fun resumeNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setInputData(workDataOf(KEY_MANUAL to true, KEY_RESUME to true))
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         }
 
         fun cancelAll(context: Context) {

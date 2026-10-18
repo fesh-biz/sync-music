@@ -75,6 +75,10 @@ class Config private constructor(context: Context) {
     private val _autoSync = MutableStateFlow(prefs.getBoolean(KEY_AUTO_SYNC, true))
     val autoSync: StateFlow<Boolean> = _autoSync.asStateFlow()
 
+    private val _paused = MutableStateFlow(prefs.getBoolean(KEY_PAUSED, false))
+    /** Paused by the user: no sync runs (automatic or on opening the app) until resumed. */
+    val paused: StateFlow<Boolean> = _paused.asStateFlow()
+
     private val _deleteRemoved = MutableStateFlow(prefs.getBoolean(KEY_DELETE_REMOVED, true))
     val deleteRemoved: StateFlow<Boolean> = _deleteRemoved.asStateFlow()
 
@@ -99,6 +103,7 @@ class Config private constructor(context: Context) {
         _server.value = value
         writeJson(KEY_SERVER, value, PairedServer.serializer())
         if (value == null) {
+            setPaused(false)
             setLastSync(null)
             setFolders(emptyList())
             _mappings.value = emptyMap()
@@ -115,6 +120,11 @@ class Config private constructor(context: Context) {
     fun setAutoSync(value: Boolean) {
         _autoSync.value = value
         prefs.edit().putBoolean(KEY_AUTO_SYNC, value).apply()
+    }
+
+    fun setPaused(value: Boolean) {
+        _paused.value = value
+        prefs.edit().putBoolean(KEY_PAUSED, value).commit()
     }
 
     fun setDeleteRemoved(value: Boolean) {
@@ -165,6 +175,7 @@ class Config private constructor(context: Context) {
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_SERVER = "server"
         private const val KEY_AUTO_SYNC = "auto_sync"
+        private const val KEY_PAUSED = "paused"
         private const val KEY_DELETE_REMOVED = "delete_removed"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_STORAGE = "storage_id"

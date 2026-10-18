@@ -31,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,7 +57,7 @@ data class EngineState(
     val note: String? = null,
 )
 
-enum class Outcome { NOT_PAIRED, NO_ACCESS, NO_WIFI, NOT_FOUND, UNAUTHORIZED, DONE, FAILED, STOPPED, BUSY }
+enum class Outcome { NOT_PAIRED, NO_ACCESS, NO_WIFI, NOT_FOUND, UNAUTHORIZED, DONE, FAILED, STOPPED, BUSY, PAUSED }
 
 object SyncEngine {
     private val mutex = Mutex()
@@ -67,15 +68,52 @@ object SyncEngine {
         _state.value = state
     }
 
-    suspend fun run(context: Context, manual: Boolean, goForeground: suspend () -> Unit): Outcome {
-        if (!mutex.tryLock()) return Outcome.BUSY
+    /** The running sync, so [pause] can stop it. */
+    @Volatile
+    private var current: Job? = null
+
+    /**
+     * [waitForLock]: resuming right after a pause, while the paused run may still be finishing —
+     * wait for it instead of giving up.
+     */
+    suspend fun run(context: Context, manual: Boolean, goForeground: suspend () -> Unit, waitForLock: Boolean = false): Outcome {
+        val config = Config.get(context)
+        if (config.paused.value) return Outcome.PAUSED
+        val locked = if (waitForLock) withTimeoutOrNull(60_000) { mutex.lock() } != null else mutex.tryLock()
+        if (!locked) return Outcome.BUSY
         try {
+            if (config.paused.value) return Outcome.PAUSED
             _state.value = EngineState(running = true, note = "Пошук комп'ютера…")
-            return Session(context.applicationContext, goForeground).run()
+            return coroutineScope {
+                val session = async { Session(context.applicationContext, goForeground).run() }
+                current = session
+                if (config.paused.value) session.cancel()
+                try {
+                    session.await()
+                } catch (e: CancellationException) {
+                    // Only the session was cancelled (paused); the worker itself goes on and ends normally.
+                    if (isActive && config.paused.value) Outcome.PAUSED else throw e
+                }
+            }
         } finally {
+            current = null
             _state.update { it.copy(running = false) }
             mutex.unlock()
         }
+    }
+
+    /** Stops the running sync and keeps it from starting until [resume]; partial files stay for resuming. */
+    fun pause(context: Context) {
+        Log.i("SyncEngine", "Paused by the user")
+        Config.get(context).setPaused(true)
+        current?.cancel()
+    }
+
+    fun resume(context: Context) {
+        Log.i("SyncEngine", "Resumed by the user")
+        Config.get(context).setPaused(false)
+        Notifications.cancelPaused(context)
+        SyncWorker.resumeNow(context)
     }
 }
 
@@ -182,6 +220,7 @@ private class Session(
             folders = list.map { it.progress() },
             appVersionCode = BuildConfig.VERSION_CODE,
             timestamp = System.currentTimeMillis(),
+            paused = phase == SyncPhase.STOPPED && config.paused.value,
         )
     }
 
@@ -353,7 +392,8 @@ private class Session(
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
-                finish(api, SyncPhase.STOPPED, "Синхронізацію перервано, продовжиться пізніше", Outcome.STOPPED)
+                val text = if (config.paused.value) "Синхронізацію призупинено" else "Синхронізацію перервано, продовжиться пізніше"
+                finish(api, SyncPhase.STOPPED, text, Outcome.STOPPED)
             }
             throw e
         } catch (e: UnauthorizedException) {
@@ -763,7 +803,11 @@ private class Session(
         }
         Log.i(TAG, "Finished $finalPhase after ${elapsed()} ms: down=$downloaded up=$uploaded deleted=$deleted ${text.orEmpty()}")
         Notifications.cancelProgress(ctx)
-        if (downloaded > 0 || uploaded > 0 || deleted > 0) Notifications.showDone(ctx, progress)
+        if (progress.paused) {
+            Notifications.showPaused(ctx, progress)
+        } else if (downloaded > 0 || uploaded > 0 || deleted > 0) {
+            Notifications.showDone(ctx, progress)
+        }
         return outcome
     }
 
