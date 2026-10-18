@@ -1,0 +1,75 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:processResources NO-SOURCE
+> Task :androidApp:preBuild UP-TO-DATE
+> Task :androidApp:preReleaseBuild UP-TO-DATE
+> Task :androidApp:mergeReleaseJniLibFolders
+> Task :androidApp:buildKotlinToolingMetadata
+> Task :androidApp:checkReleaseDuplicateClasses
+> Task :androidApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :androidApp:generateReleaseBuildConfig
+> Task :androidApp:checkReleaseAarMetadata
+> Task :androidApp:generateReleaseResValues FROM-CACHE
+> Task :androidApp:mapReleaseSourceSetPaths
+> Task :androidApp:generateReleaseResources FROM-CACHE
+> Task :androidApp:mergeReleaseResources FROM-CACHE
+> Task :androidApp:packageReleaseResources FROM-CACHE
+> Task :androidApp:parseReleaseLocalResources FROM-CACHE
+> Task :androidApp:createReleaseCompatibleScreenManifests
+> Task :androidApp:extractDeepLinksRelease FROM-CACHE
+> Task :androidApp:processReleaseMainManifest
+> Task :androidApp:processReleaseManifest
+> Task :androidApp:processReleaseManifestForPackage
+> Task :androidApp:processReleaseResources
+> Task :androidApp:javaPreCompileRelease FROM-CACHE
+> Task :androidApp:mergeReleaseArtProfile
+> Task :androidApp:extractProguardFiles
+> Task :androidApp:mergeReleaseStartupProfile
+> Task :androidApp:mergeReleaseShaders
+> Task :androidApp:compileReleaseShaders NO-SOURCE
+> Task :androidApp:generateReleaseAssets UP-TO-DATE
+> Task :androidApp:mergeReleaseAssets
+> Task :androidApp:compressReleaseAssets FROM-CACHE
+> Task :androidApp:extractReleaseVersionControlInfo
+> Task :androidApp:collectReleaseDependencies
+> Task :androidApp:sdkReleaseDependencyData
+> Task :androidApp:validateSigningRelease
+> Task :androidApp:writeReleaseAppMetadata
+> Task :androidApp:writeReleaseSigningConfigVersions
+> Task :shared:compileKotlin
+> Task :shared:compileJava NO-SOURCE
+> Task :shared:classes UP-TO-DATE
+> Task :shared:jar
+> Task :androidApp:mergeReleaseNativeLibs
+
+> Task :androidApp:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :androidApp:extractReleaseNativeSymbolTables FROM-CACHE
+> Task :androidApp:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :androidApp:compileReleaseKotlin
+> Task :androidApp:compileReleaseJavaWithJavac
+> Task :androidApp:mergeReleaseGeneratedProguardFiles
+> Task :androidApp:processReleaseJavaRes
+> Task :androidApp:mergeReleaseJavaResource
+> Task :androidApp:expandReleaseArtProfileWildcards
+> Task :androidApp:minifyReleaseWithR8
+> Task :androidApp:convertShrunkResourcesToBinaryRelease
+> Task :androidApp:optimizeReleaseResources
+> Task :androidApp:compileReleaseArtProfile
+> Task :androidApp:packageRelease
+> Task :androidApp:createReleaseApkListingFileRedirect
+> Task :androidApp:assembleRelease
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792343017288.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/sync-music/sync-music/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3m 11s
+47 actionable tasks: 38 executed, 9 from cache

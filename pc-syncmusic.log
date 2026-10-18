@@ -1,0 +1,97 @@
+2026-10-18 17:11:59.910 INFO Starting Sync Music 1.0.25
+2026-10-18 17:11:59.988 INFO Folders: [/tmp/e2e/music]
+2026-10-18 17:12:00.126 INFO Discovery listening on UDP 45455
+2026-10-18 17:12:00.187 INFO Core started 1724 ms after launch
+2026-10-18 17:12:00.195 INFO Scanned 26 files in 99 ms (was null)
+2026-10-18 17:12:00.201 INFO Watching /tmp/e2e/music (11 folders)
+2026-10-18 17:12:00.210 INFO Network addresses [LocalAddress(address=10.1.0.20, interfaceName=eth0)] in 52 ms
+2026-10-18 17:12:01.843 INFO HTTP server on port 45456
+2026-10-18 17:12:05.314 INFO Window composed 6960 ms after launch
+2026-10-18 17:12:09.311 INFO Test command: show-phone-picker|music|new
+2026-10-18 17:12:14.335 INFO Test command: hide-phone-picker
+2026-10-18 17:18:40.032 INFO Paired device Google sdk_gphone64_x86_64 (6d376fb7-cdae-4848-826d-0c53c482f951)
+2026-10-18 17:19:08.592 INFO Folder music changed, rescanning
+2026-10-18 17:19:08.600 INFO Scanned 24 files in 8 ms (was 26)
+2026-10-18 17:19:11.969 INFO Folder music changed, rescanning
+2026-10-18 17:19:11.972 INFO Scanned 20 files in 3 ms (was 24)
+2026-10-18 17:19:43.100 INFO Folder music changed, rescanning
+2026-10-18 17:19:43.104 INFO Scanned 22 files in 1 ms (was 20)
+2026-10-18 17:19:59.392 INFO Folder music changed, rescanning
+2026-10-18 17:20:00.164 INFO Scanned 23 files in 12 ms (was 22)
+2026-10-18 17:20:01.844 INFO Folder music changed, rescanning
+2026-10-18 17:20:03.723 INFO Test command: rescan
+2026-10-18 17:20:30.079 WARN Request /api/file?folder=music&path=Big%2Fhuge.flac failed :: io.ktor.utils.io.ClosedByteChannelException: Broken pipe
+2026-10-18 17:20:46.857 INFO Resume Big/huge.flac from bytes=32836808-
+2026-10-18 17:21:55.754 INFO Folder music changed, rescanning
+2026-10-18 17:21:55.756 INFO Scanned 22 files in 2 ms (was 23)
+2026-10-18 17:22:12.100 INFO Folder music changed, rescanning
+2026-10-18 17:22:14.147 INFO Folder music changed, rescanning
+2026-10-18 17:22:14.151 INFO Scanned 23 files in 4 ms (was 22)
+2026-10-18 17:22:15.799 INFO Test command: rescan
+2026-10-18 17:22:44.185 WARN Request /api/file?folder=music&path=Big%2Fpause.flac failed :: io.ktor.utils.io.ClosedByteChannelException: Broken pipe
+2026-10-18 17:23:12.223 INFO Resume Big/pause.flac from bytes=33072122-
+2026-10-18 17:24:04.647 INFO Folder music changed, rescanning
+2026-10-18 17:24:04.648 INFO Scanned 22 files in 0 ms (was 23)
+2026-10-18 17:24:19.947 INFO Test command: add-folder|/tmp/e2e/pc-camera|TO_PC
+2026-10-18 17:24:19.957 INFO Scanned 0 files in 1 ms (was null)
+2026-10-18 17:24:19.957 INFO Watching /tmp/e2e/pc-camera (1 folders)
+2026-10-18 17:24:19.958 INFO Added folder pc-camera (/tmp/e2e/pc-camera, TO_PC)
+2026-10-18 17:24:19.958 INFO add-folder: ok
+2026-10-18 17:25:14.696 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:25:14.696 INFO Scanned 5 files in 0 ms (was 0)
+2026-10-18 17:25:29.172 INFO Test command: set-delete|pc-camera|true
+2026-10-18 17:25:55.229 INFO Kept the existing 2026/Квітень/IMG_0100.jpg, saved the phone's version as IMG_0100 (з телефона).jpg
+2026-10-18 17:25:56.729 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:25:56.730 INFO Scanned 6 files in 1 ms (was 5)
+2026-10-18 17:26:39.003 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:26:54.645 INFO Upload resume big.mp4 from 26608500
+2026-10-18 17:28:09.064 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:28:09.064 INFO Scanned 7 files in 0 ms (was 6)
+2026-10-18 17:28:09.690 INFO Test command: add-folder|/tmp/e2e/docs|TO_PHONE
+2026-10-18 17:28:09.693 INFO Scanned 2 files in 1 ms (was null)
+2026-10-18 17:28:09.696 INFO Added folder docs (/tmp/e2e/docs, TO_PHONE)
+2026-10-18 17:28:09.696 INFO add-folder: ok
+2026-10-18 17:28:09.696 INFO Watching /tmp/e2e/docs (2 folders)
+2026-10-18 17:28:26.248 INFO Test command: show-phone-picker|docs
+2026-10-18 17:28:31.257 INFO Test command: hide-phone-picker
+2026-10-18 17:28:32.759 INFO Test command: show-phone-picker|docs|new
+2026-10-18 17:28:37.768 INFO Test command: hide-phone-picker
+2026-10-18 17:28:39.271 INFO Test command: set-phone-folder|docs|/storage/emulated/0/Documents/Docs from PC
+2026-10-18 17:28:39.282 INFO Phone folder for 82b08d05-22b0-4d2e-9fcf-f2a294f89eeb on 6d376fb7-cdae-4848-826d-0c53c482f951: /storage/emulated/0/Documents/Docs from PC (deleteOld=false)
+2026-10-18 17:28:55.868 INFO Test command: add-folder|/tmp/e2e/media|TO_PHONE
+2026-10-18 17:28:55.871 INFO Added folder media (/tmp/e2e/media, TO_PHONE)
+2026-10-18 17:28:55.871 INFO add-folder: ok
+2026-10-18 17:28:55.871 INFO Scanned 8 files in 0 ms (was null)
+2026-10-18 17:28:55.872 INFO Watching /tmp/e2e/media (3 folders)
+2026-10-18 17:28:57.373 INFO Test command: set-file-types|media|MUSIC
+2026-10-18 17:28:57.377 INFO File types of 33f5e0e1-84fa-42b6-91ff-ff6b40932bf7: MUSIC
+2026-10-18 17:28:57.381 INFO Scanned 3 files in 4 ms (was 8)
+2026-10-18 17:29:12.916 INFO Test command: set-file-types|media|MOVIES
+2026-10-18 17:29:12.918 INFO File types of 33f5e0e1-84fa-42b6-91ff-ff6b40932bf7: MOVIES
+2026-10-18 17:29:27.463 INFO Test command: set-file-types|media|ALL
+2026-10-18 17:29:27.464 INFO File types of 33f5e0e1-84fa-42b6-91ff-ff6b40932bf7: ALL
+2026-10-18 17:29:27.465 INFO Scanned 8 files in 1 ms (was 3)
+2026-10-18 17:29:42.037 INFO Test command: remove-folder|media
+2026-10-18 17:29:43.557 INFO Test command: set-file-types|pc-camera|MOVIES
+2026-10-18 17:29:43.558 INFO File types of 430e8f8e-c2ac-4ee7-95e0-58f9719d3b22: MOVIES
+2026-10-18 17:29:43.558 INFO Scanned 2 files in 0 ms (was 7)
+2026-10-18 17:29:58.232 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:29:58.233 INFO Scanned 3 files in 0 ms (was 2)
+2026-10-18 17:30:00.597 INFO Test command: set-file-types|pc-camera|ALL
+2026-10-18 17:30:00.598 INFO File types of 430e8f8e-c2ac-4ee7-95e0-58f9719d3b22: ALL
+2026-10-18 17:30:00.599 INFO Scanned 8 files in 1 ms (was 3)
+2026-10-18 17:30:15.077 INFO Folder pc-camera changed, rescanning
+2026-10-18 17:30:15.077 INFO Scanned 9 files in 0 ms (was 8)
+2026-10-18 17:34:05.456 INFO Test command: rescan
+2026-10-18 17:34:06.242 INFO Scanned 28022 files in 785 ms (was 22)
+2026-10-18 17:34:07.652 INFO Folder music changed, rescanning
+2026-10-18 17:34:58.130 INFO Test command: rescan
+2026-10-18 17:34:58.132 INFO Scanned 22 files in 1 ms (was 28022)
+2026-10-18 17:34:59.422 INFO Folder music changed, rescanning
+2026-10-18 17:44:17.082 INFO Test command: add-folder|/tmp/e2e/removeme|TO_PHONE
+2026-10-18 17:44:17.084 INFO Added folder removeme (/tmp/e2e/removeme, TO_PHONE)
+2026-10-18 17:44:17.084 INFO add-folder: ok
+2026-10-18 17:44:17.088 INFO Scanned 300 files in 2 ms (was null)
+2026-10-18 17:44:17.090 INFO Watching /tmp/e2e/removeme (1 folders)
+2026-10-18 17:44:31.616 INFO Test command: remove-folder|removeme
+2026-10-18 17:44:45.654 INFO Test command: remove-devices

@@ -1,0 +1,40 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :downloadWix
+Download https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip
+
+> Task :desktopApp:checkRuntime FROM-CACHE
+> Task :unzipWix
+> Task :desktopApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :desktopApp:convertXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:copyNonXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:prepareComposeResourcesTaskForMain NO-SOURCE
+> Task :desktopApp:generateResourceAccessorsForMain SKIPPED
+> Task :desktopApp:generateActualResourceCollectorsForMain SKIPPED
+> Task :desktopApp:generateComposeResClass SKIPPED
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:processResources NO-SOURCE
+> Task :desktopApp:assembleMainResources
+> Task :desktopApp:generateBuildInfo
+> Task :desktopApp:processResources
+> Task :desktopApp:createRuntimeImage
+> Task :desktopApp:prepareAppResources NO-SOURCE
+> Task :desktopApp:unpackDefaultComposeDesktopJvmApplicationResources
+> Task :shared:compileKotlin
+> Task :shared:compileJava NO-SOURCE
+> Task :shared:classes UP-TO-DATE
+> Task :shared:jar
+> Task :desktopApp:compileKotlin
+> Task :desktopApp:compileJava NO-SOURCE
+> Task :desktopApp:classes
+> Task :desktopApp:jar
+> Task :desktopApp:packageMsi
+The distribution is written to D:\a\sync-music\sync-music\desktopApp\build\compose\binaries\main\msi\SyncMusic-1.0.25.msi
+
+> Task :desktopApp:createDistributable
+The distribution is written to D:\a\sync-music\sync-music\desktopApp\build\compose\binaries\main\app
+gradle/actions: Writing build results to D:\a\_temp\.gradle-actions\build-results\__run-1792343276217.json
+
+BUILD SUCCESSFUL in 2m 41s
+14 actionable tasks: 13 executed, 1 from cache

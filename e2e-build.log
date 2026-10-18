@@ -1,0 +1,33 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :desktopApp:checkRuntime FROM-CACHE
+> Task :desktopApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :desktopApp:convertXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:copyNonXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:prepareComposeResourcesTaskForMain NO-SOURCE
+> Task :desktopApp:generateResourceAccessorsForMain SKIPPED
+> Task :desktopApp:generateActualResourceCollectorsForMain SKIPPED
+> Task :desktopApp:generateComposeResClass SKIPPED
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:processResources NO-SOURCE
+> Task :desktopApp:assembleMainResources
+> Task :desktopApp:generateBuildInfo
+> Task :desktopApp:processResources
+> Task :desktopApp:createRuntimeImage
+> Task :desktopApp:prepareAppResources NO-SOURCE
+> Task :desktopApp:unpackDefaultComposeDesktopJvmApplicationResources
+> Task :shared:compileKotlin
+> Task :shared:compileJava NO-SOURCE
+> Task :shared:classes UP-TO-DATE
+> Task :shared:jar
+> Task :desktopApp:compileKotlin
+> Task :desktopApp:compileJava NO-SOURCE
+> Task :desktopApp:classes
+> Task :desktopApp:jar
+
+> Task :desktopApp:createDistributable
+The distribution is written to /home/runner/work/sync-music/sync-music/desktopApp/build/compose/binaries/main/app
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1792343267408.json
+
+BUILD SUCCESSFUL in 1m 5s
+11 actionable tasks: 10 executed, 1 from cache

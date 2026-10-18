@@ -1,0 +1,22 @@
+17:13:41 '10.0.2.2', attempt 1: the field shows '1', focused fields=1
+17:14:20 '10.0.2.2', attempt 2: the field shows '', focused fields=1
+17:14:20 disabling the on-screen keyboard
+17:14:53 '10.0.2.2', attempt 3: the field shows '', focused fields=1
+17:14:55 '10.0.2.2', attempt 4: no text field #0 on screen yet
+17:15:30 '10.0.2.2', attempt 5: the field shows '10', focused fields=1
+17:16:01 '10.0.2.2': ok on attempt 6
+17:17:17 '10.0.2.2': ok on attempt 1
+17:17:53 '000000': ok on attempt 1
+17:18:32 '351723': ok on attempt 1
+17:39:40 'Music', attempt 1: no text field #0 on screen yet
+17:40:14 'Music', attempt 2: the field shows 'M', focused fields=1
+17:40:14 disabling the on-screen keyboard
+17:40:42 'Music': ok on attempt 3
+17:40:56 'Створити' not on screen after typing (attempt 1), opening the dialog again
+17:41:34 'Music', attempt 1: the field shows 'M', focused fields=1
+17:41:58 'Music', attempt 2: the field shows '', focused fields=1
+17:41:58 disabling the on-screen keyboard
+17:42:24 'Music': ok on attempt 3
+17:42:42 'Створити' not on screen after typing (attempt 2), opening the dialog again
+17:43:15 'Music', attempt 1: the field shows '', focused fields=0
+17:43:35 'Music': ok on attempt 2
