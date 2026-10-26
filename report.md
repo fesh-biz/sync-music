@@ -1,0 +1,146 @@
+# Sync Music e2e
+
+- **PASS** PC app starts, server running, library scanned — server=Running(port=45456) files=26 expected=26
+- **PASS** APK installs (previous release, to test the upgrade) — Performing Streamed Install
+Success
+- **PASS** Pairing screen shown
+- **PASS** Manual address field present — 1 fields
+- **PASS** PC found by manual address
+- **PASS** Wrong code rejected
+- **PASS** Paired with correct code — pin=542258
+- **PASS** Sync finished: initial — phase=DONE synced=26/26 expected=26 downloaded=26 deleted=0 msg=None
+- **PASS** Phone matches PC (initial sync) — 26/26 files; missing=[] extra=[] wrong=[]
+- **PASS** New version installs over the previous release — Performing Streamed Install
+Success
+- **PASS** Sync finished: after upgrade — phase=DONE synced=26/26 expected=26 downloaded=0 deleted=0 msg=None
+- **PASS** Upgrade keeps the synced music (nothing downloaded again) — downloaded=0
+- **PASS** Phone matches PC (after upgrade) — 26/26 files; missing=[] extra=[] wrong=[]
+- **PASS** Folder list shown after upgrade
+- **PASS** All file types are synced (covers, text files)
+- **PASS** PC counter updates after deleting 2 files — 26 -> 24 in 2.0 s
+- **PASS** Sync finished: after PC deletions — phase=DONE synced=20/20 expected=20 downloaded=0 deleted=6 msg=None
+- **PASS** Phone matches PC (after PC deletions) — 20/20 files; missing=[] extra=[] wrong=[]
+- **PASS** Empty album folder removed on phone — ls: /sdcard/Music/Sync Music/Rock: No such file or directory
+- **PASS** File deleted on phone
+- **PASS** Sync finished: restore deleted on phone — phase=DONE synced=20/20 expected=20 downloaded=1 deleted=0 msg=None
+- **PASS** Phone matches PC (file deleted on phone is restored) — 20/20 files; missing=[] extra=[] wrong=[]
+- **PASS** Sync finished: new and changed files — phase=DONE synced=22/22 expected=22 downloaded=3 deleted=0 msg=None
+- **PASS** Phone matches PC (new and changed files) — 22/22 files; missing=[] extra=[] wrong=[]
+- **PASS** Partial file kept after the app was killed — 25 MB of 250 MB
+- **PASS** Sync finished: big file after resume — phase=DONE synced=23/23 expected=23 downloaded=1 deleted=0 msg=None
+- **PASS** Download resumed from the interruption point (HTTP Range)
+- **PASS** Phone matches PC (big file) — 23/23 files; missing=[] extra=[] wrong=[]
+- **PASS** Sync finished: big file removed — phase=DONE synced=22/22 expected=22 downloaded=0 deleted=1 msg=None
+- **PASS** Pause button is shown during a sync
+- **PASS** Phone reports the sync as paused — phase=STOPPED paused=True msg=Синхронізацію призупинено
+- **PASS** Nothing downloads while paused — 32155383 -> 32155383
+- **PASS** Pause survives reopening the app — part 32155383 -> 32155383
+- **PASS** Resume button works
+- **PASS** Sync finished: after pause — phase=DONE synced=23/23 expected=23 downloaded=1 deleted=0 msg=None
+- **PASS** Resumed from where it was paused (HTTP Range)
+- **PASS** Phone matches PC (after pause) — 23/23 files; missing=[] extra=[] wrong=[]
+- **PASS** Sync finished: pause file removed — phase=DONE synced=22/22 expected=22 downloaded=0 deleted=1 msg=None
+- **PASS** Test photos placed on the phone
+- **PASS** PC added a phone -> PC folder
+- **PASS** Sync finished: folder list with a new phone -> PC folder — phase=DONE synced=22/22 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Phone asks to choose a folder for it
+- **PASS** Folder picker opened
+- **PASS** Sync finished: phone -> PC upload — phase=DONE synced=27/27 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Phone files arrived on the PC — 5/5
+- **PASS** Sync finished: phone deleted a photo — phase=DONE synced=26/26 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** PC keeps the file deleted on the phone
+- **PASS** Phone -> PC folder cannot be switched to deleting — {'id': '74230dcb-9c8e-4c3a-8670-fbda066a8ce5', 'name': 'pc-camera', 'path': '/tmp/e2e/pc-camera', 'direction': 'TO_PC', 'deleteMissing': False, 'fileTypes': 'ALL', 'files': 5}
+- **PASS** Sync finished: phone deleted another photo — phase=DONE synced=25/25 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** PC still keeps both files deleted on the phone
+- **PASS** Sync finished: photo edited on the phone — phase=DONE synced=25/25 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** PC copy is not overwritten by the edited phone file
+- **PASS** Edited phone file saved next to it as a copy — ['IMG_0100 (з телефона).jpg', 'IMG_0100.jpg']
+- **PASS** Sync finished: photo edited on the phone, again — phase=DONE synced=25/25 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Repeated syncs do not make more copies — ['IMG_0100 (з телефона).jpg']
+- **PASS** PC keeps the partial upload — 20 MB of 200 MB
+- **PASS** Sync finished: big upload after resume — phase=DONE synced=26/26 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Upload resumed from the interruption point
+- **PASS** Big file identical on the PC
+- **PASS** Sync finished: second PC -> phone folder — phase=DONE synced=27/27 expected=None downloaded=2 deleted=0 msg=None
+- **PASS** Phone matches PC (second folder) — 2/2 files; missing=[] extra=[] wrong=[]
+- **PASS** Hidden files and system junk are not synced
+- **PASS** Phone reported its storages and folders to the PC — volumes=1 dirs=14
+- **PASS** PC remembers the phone folder — {'id': 'ed94a774-276a-4154-b7c7-24903f5aa64a', 'name': 'docs', 'path': '/tmp/e2e/docs', 'direction': 'TO_PHONE', 'deleteMissing': True, 'fileTypes': 'ALL', 'files': 2, 'phoneTarget': '/storage/emulated/0/Documents/Docs from PC'}
+- **PASS** Sync finished: phone folder chosen on the PC — phase=DONE synced=27/27 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Phone uses the folder chosen on the PC — phonePath=/storage/emulated/0/Documents/Docs from PC localPath=Пам'ять телефона › Documents/Docs from PC msg=None
+- **PASS** Files moved on the phone, not downloaded again — downloaded=0
+- **PASS** Phone matches PC (folder chosen on the PC) — 2/2 files; missing=[] extra=[] wrong=[]
+- **PASS** Old phone folder is empty after the move — 0 files left of 2
+- **PASS** PC lists only music — {'id': '1f507641-df5f-4049-88da-15cbfedf1c03', 'name': 'media', 'path': '/tmp/e2e/media', 'direction': 'TO_PHONE', 'deleteMissing': True, 'fileTypes': 'MUSIC', 'files': 3}
+- **PASS** Sync finished: only music — phase=DONE synced=30/30 expected=None downloaded=3 deleted=0 msg=None
+- **PASS** Phone got only the music — ['Альбом/01 Пісня.mp3', 'Альбом/02 Пісня.flac', 'Альбом/Плейлист.m3u']
+- **PASS** PC lists only movies — {'id': '1f507641-df5f-4049-88da-15cbfedf1c03', 'name': 'media', 'path': '/tmp/e2e/media', 'direction': 'TO_PHONE', 'deleteMissing': True, 'fileTypes': 'MOVIES', 'files': 3}
+- **PASS** Sync finished: only movies — phase=DONE synced=30/30 expected=None downloaded=3 deleted=3 msg=None
+- **PASS** Phone got the movies and dropped the music (mirror) — ['Фільми/Кліп.MP4', 'Фільми/Фільм.mkv', 'Фільми/Фільм.srt']
+- **PASS** Sync finished: all files again — phase=DONE synced=35/35 expected=None downloaded=5 deleted=0 msg=None
+- **PASS** Phone matches PC (all files after the filter) — 8/8 files; missing=[] extra=[] wrong=[]
+- **PASS** Sync finished: phone -> PC, only movies — phase=DONE synced=26/26 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Video sent to the PC
+- **PASS** Photo not sent while the folder takes only movies
+- **PASS** Sync finished: phone -> PC, all files again — phase=DONE synced=29/29 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Photo sent once all files are allowed
+- **PASS** Files copied to phone by cable
+- **PASS** Sync finished: 28 000 files copied by cable (adopted, nothing downloaded) — phase=DONE synced=28029/28029 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Cable-copied files were adopted, not downloaded — downloaded=0
+- **PASS** Sync finished: 28 000 files, nothing changed — phase=DONE synced=28029/28029 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Sync finished: 28 000 files deleted on PC — phase=DONE synced=29/29 expected=None downloaded=0 deleted=28000 msg=None
+- **PASS** Phone deleted the 28 000 files — 22 files left
+- **PASS** Change-folder button
+- **PASS** Folder picker opened
+- **PASS** SD card offered in the picker
+- **PASS** Music folder created on the SD card
+- **PASS** Move dialog
+- **PASS** Sync finished: music moved to SD card — phase=DONE synced=29/29 expected=None downloaded=22 deleted=0 msg=None
+- **PASS** Phone matches PC (on SD card) — 22/22 files; missing=[] extra=[] wrong=[]
+- **PASS** Old copy in phone memory removed — 0 files left in phone memory
+- **PASS** PC sees the phone folder on the SD card — SD-карта (Virtual SD card) › Music
+- **PASS** Phone started downloading the new folder
+- **PASS** Phone stops syncing a folder removed on the PC — after 0.0 s: phase=DONE downloaded=6 of 300
+- **PASS** Removed folder ends without an error — None
+- **PASS** Sync finished: next sync after removing a folder — phase=DONE synced=29/29 expected=None downloaded=0 deleted=0 msg=None
+- **PASS** Removed folder is no longer synced — ['music', 'pc-camera', 'docs']
+- **PASS** Phone notices it was disconnected on the PC
+
+## Timings
+
+- PC app ready (Linux, Xvfb): 4.5 s
+- Phone app cold start (first launch): 1785 ms
+- Sync 'initial': 5.5 s
+- Phone app cold start (after upgrade): 1190 ms
+- Sync 'after upgrade': 4.3 s
+- Sync 'after PC deletions': 8.9 s
+- Sync 'restore deleted on phone': 8.9 s
+- Sync 'new and changed files': 8.8 s
+- Sync 'big file after resume': 58.1 s
+- Sync 'big file removed': 8.8 s
+- Sync 'after pause': 29.8 s
+- Sync 'pause file removed': 8.9 s
+- Sync 'folder list with a new phone -> PC folder': 8.8 s
+- Sync 'phone -> PC upload': 3.8 s
+- Sync 'phone deleted a photo': 8.8 s
+- Sync 'phone deleted another photo': 8.7 s
+- Sync 'photo edited on the phone': 9.1 s
+- Sync 'photo edited on the phone, again': 8.8 s
+- Sync 'big upload after resume': 62.1 s
+- Sync 'second PC -> phone folder': 8.9 s
+- Sync 'phone folder chosen on the PC': 8.8 s
+- Sync 'only music': 9.7 s
+- Sync 'only movies': 8.8 s
+- Sync 'all files again': 9.7 s
+- Sync 'phone -> PC, only movies': 8.7 s
+- Sync 'phone -> PC, all files again': 8.7 s
+- adb push of 28 000 files (cable copy): 160 s
+- PC rescan with ~28 000 files: 2.9 s
+- Sync '28 000 files copied by cable (adopted, nothing downloaded)': 9.7 s
+- Sync '28 000 files, nothing changed': 11.7 s
+- Phone app cold start (with 28 000 synced files): 1116 ms
+- Sync '28 000 files deleted on PC': 142.9 s
+- Phone app cold start (SD card inserted): 1319 ms
+- Sync 'music moved to SD card': 4.8 s
+- Phone stops after the folder was removed on the PC: 0.0 s
+- Sync 'next sync after removing a folder': 8.8 s

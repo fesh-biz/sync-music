@@ -1,0 +1,53 @@
+Downloading https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%..............100%
+
+Welcome to Gradle 8.14.3!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14.3/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :downloadWix
+Download https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip
+
+> Task :desktopApp:checkRuntime
+> Task :unzipWix
+> Task :desktopApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :desktopApp:convertXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:copyNonXmlValueResourcesForMain NO-SOURCE
+> Task :desktopApp:prepareComposeResourcesTaskForMain NO-SOURCE
+> Task :desktopApp:generateResourceAccessorsForMain SKIPPED
+> Task :desktopApp:generateActualResourceCollectorsForMain SKIPPED
+> Task :desktopApp:generateComposeResClass SKIPPED
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:processResources NO-SOURCE
+> Task :desktopApp:assembleMainResources
+> Task :desktopApp:generateBuildInfo
+> Task :desktopApp:processResources
+> Task :desktopApp:createRuntimeImage
+> Task :desktopApp:prepareAppResources NO-SOURCE
+> Task :desktopApp:unpackDefaultComposeDesktopJvmApplicationResources
+> Task :shared:compileKotlin
+> Task :shared:compileJava NO-SOURCE
+> Task :shared:classes UP-TO-DATE
+> Task :shared:jar
+> Task :desktopApp:compileKotlin
+> Task :desktopApp:compileJava NO-SOURCE
+> Task :desktopApp:classes
+> Task :desktopApp:jar
+> Task :desktopApp:packageMsi
+The distribution is written to D:\a\sync-music\sync-music\desktopApp\build\compose\binaries\main\msi\SyncMusic-1.0.28.msi
+
+> Task :desktopApp:createDistributable
+The distribution is written to D:\a\sync-music\sync-music\desktopApp\build\compose\binaries\main\app
+gradle/actions: Writing build results to D:\a\_temp\.gradle-actions\build-results\__run-1793046166111.json
+
+BUILD SUCCESSFUL in 3m 36s
+14 actionable tasks: 14 executed

@@ -1,0 +1,88 @@
+Downloading https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%..............100%
+
+Welcome to Gradle 8.14.3!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14.3/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:processResources NO-SOURCE
+> Task :androidApp:preBuild UP-TO-DATE
+> Task :androidApp:preReleaseBuild UP-TO-DATE
+> Task :androidApp:mergeReleaseJniLibFolders
+> Task :androidApp:buildKotlinToolingMetadata
+> Task :androidApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :androidApp:generateReleaseBuildConfig
+> Task :androidApp:checkReleaseDuplicateClasses
+> Task :androidApp:generateReleaseResValues
+> Task :androidApp:checkReleaseAarMetadata
+> Task :androidApp:mapReleaseSourceSetPaths
+> Task :androidApp:generateReleaseResources
+> Task :androidApp:packageReleaseResources
+> Task :androidApp:mergeReleaseResources
+> Task :androidApp:createReleaseCompatibleScreenManifests
+> Task :androidApp:extractDeepLinksRelease
+> Task :androidApp:parseReleaseLocalResources
+> Task :shared:compileKotlin
+> Task :androidApp:processReleaseMainManifest
+> Task :shared:compileJava NO-SOURCE
+> Task :shared:classes UP-TO-DATE
+> Task :shared:jar
+> Task :androidApp:processReleaseManifest
+> Task :androidApp:mergeReleaseNativeLibs
+> Task :androidApp:javaPreCompileRelease
+
+> Task :androidApp:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :androidApp:mergeReleaseArtProfile
+> Task :androidApp:extractReleaseNativeSymbolTables
+> Task :androidApp:extractProguardFiles
+> Task :androidApp:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :androidApp:mergeReleaseStartupProfile
+> Task :androidApp:mergeReleaseShaders
+> Task :androidApp:compileReleaseShaders NO-SOURCE
+> Task :androidApp:generateReleaseAssets UP-TO-DATE
+> Task :androidApp:mergeReleaseAssets
+> Task :androidApp:compressReleaseAssets
+> Task :androidApp:extractReleaseVersionControlInfo
+> Task :androidApp:collectReleaseDependencies
+> Task :androidApp:sdkReleaseDependencyData
+> Task :androidApp:validateSigningRelease
+> Task :androidApp:writeReleaseAppMetadata
+> Task :androidApp:writeReleaseSigningConfigVersions
+> Task :androidApp:processReleaseManifestForPackage
+> Task :androidApp:processReleaseResources
+> Task :androidApp:compileReleaseKotlin
+> Task :androidApp:compileReleaseJavaWithJavac
+> Task :androidApp:mergeReleaseGeneratedProguardFiles
+> Task :androidApp:processReleaseJavaRes
+> Task :androidApp:expandReleaseArtProfileWildcards
+> Task :androidApp:mergeReleaseJavaResource
+> Task :androidApp:minifyReleaseWithR8
+> Task :androidApp:convertShrunkResourcesToBinaryRelease
+> Task :androidApp:optimizeReleaseResources
+> Task :androidApp:compileReleaseArtProfile
+> Task :androidApp:packageRelease
+> Task :androidApp:createReleaseApkListingFileRedirect
+> Task :androidApp:assembleRelease
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793045935729.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/sync-music/sync-music/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3m 5s
+47 actionable tasks: 47 executed
