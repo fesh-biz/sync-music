@@ -92,7 +92,7 @@ fun App(controller: AppController) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Header(serverState, addresses, addressesLoading, settings.port)
+                Header(serverState, controller.computerName, addresses, addressesLoading)
                 FoldersCard(settings, runtimeVersion, live, phoneStorage, controller)
                 if (settings.devices.isEmpty()) {
                     ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
@@ -114,7 +114,7 @@ fun App(controller: AppController) {
 }
 
 @Composable
-private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddress>, addressesLoading: Boolean, port: Int) {
+private fun Header(serverState: ServerState, computerName: String, addresses: List<NetUtil.LocalAddress>, addressesLoading: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
@@ -126,11 +126,10 @@ private fun Header(serverState: ServerState, addresses: List<NetUtil.LocalAddres
         }
         when (serverState) {
             is ServerState.Running -> {
-                val address = addresses.firstOrNull()?.address
-                when {
-                    address != null -> StatusPill("Працює · $address:$port", Palette.Green, Palette.GreenSoft)
-                    addressesLoading -> StatusPill("Працює", Palette.Green, Palette.GreenSoft)
-                    else -> StatusPill("Працює · немає мережі", Palette.Amber, Palette.AmberSoft)
+                if (addresses.isNotEmpty() || addressesLoading) {
+                    StatusPill("Працює · $computerName", Palette.Green, Palette.GreenSoft)
+                } else {
+                    StatusPill("Працює · немає мережі", Palette.Amber, Palette.AmberSoft)
                 }
             }
             ServerState.Starting -> StatusPill("Запуск…", Palette.Grey, Palette.GreySoft)
