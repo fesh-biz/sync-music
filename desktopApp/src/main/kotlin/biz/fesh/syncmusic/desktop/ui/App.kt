@@ -45,8 +45,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import biz.fesh.syncmusic.desktop.AppController
+import biz.fesh.syncmusic.desktop.MainDialog
 import biz.fesh.syncmusic.desktop.AppLog
 import biz.fesh.syncmusic.desktop.AppPaths
 import biz.fesh.syncmusic.desktop.ApkResource
@@ -80,6 +84,7 @@ fun App(controller: AppController) {
     val serverState by controller.serverState.collectAsState()
     val phonePicker by controller.phonePicker.collectAsState()
     val phoneStorage by controller.phoneStorage.collectAsState()
+    val dialog by controller.dialog.collectAsState()
     // Network adapters are enumerated in the background: on Windows with WSL/Hyper-V/VPN adapters
     // this can take seconds and must never block the window.
     val loadedAddresses by controller.addresses.collectAsState()
@@ -92,21 +97,15 @@ fun App(controller: AppController) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Header(serverState, controller.computerName, addresses, addressesLoading)
+                Header(serverState, controller.computerName, addresses, addressesLoading, settings.devices.isNotEmpty(), controller)
+                // What is synced and what remains comes first, so it is in view as soon as the window opens.
+                DevicesSection(settings, live, controller)
                 FoldersCard(settings, runtimeVersion, live, phoneStorage, controller)
-                if (settings.devices.isEmpty()) {
-                    ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
-                    DevicesSection(settings, live, controller)
-                } else {
-                    DevicesSection(settings, live, controller)
-                    ConnectCard(Modifier.fillMaxWidth(), pin, addresses, addressesLoading, settings.port, controller)
-                }
-                SettingsCard(settings, controller)
-                Text(
-                    "Sync Music ${BuildInfo.version}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            }
+            when (dialog) {
+                MainDialog.CONNECT -> ConnectDialog(pin, addresses, addressesLoading, settings.port, controller)
+                MainDialog.SETTINGS -> SettingsDialog(settings, controller)
+                null -> {}
             }
             phonePicker?.let { PhoneFolderDialog(it, controller) }
         }
@@ -114,7 +113,14 @@ fun App(controller: AppController) {
 }
 
 @Composable
-private fun Header(serverState: ServerState, computerName: String, addresses: List<NetUtil.LocalAddress>, addressesLoading: Boolean) {
+private fun Header(
+    serverState: ServerState,
+    computerName: String,
+    addresses: List<NetUtil.LocalAddress>,
+    addressesLoading: Boolean,
+    hasPhones: Boolean,
+    controller: AppController,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
@@ -122,8 +128,11 @@ private fun Header(serverState: ServerState, computerName: String, addresses: Li
                 "Синхронізація файлів між комп'ютером і телефоном через Wi-Fi",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
+        Spacer(Modifier.width(12.dp))
         when (serverState) {
             is ServerState.Running -> {
                 if (addresses.isNotEmpty() || addressesLoading) {
@@ -134,6 +143,40 @@ private fun Header(serverState: ServerState, computerName: String, addresses: Li
             }
             ServerState.Starting -> StatusPill("Запуск…", Palette.Grey, Palette.GreySoft)
             is ServerState.Failed -> StatusPill(serverState.message, Palette.Red, Palette.RedSoft)
+        }
+        Spacer(Modifier.width(10.dp))
+        if (hasPhones) {
+            OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+        } else {
+            Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+        }
+        Spacer(Modifier.width(8.dp))
+        OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }) { Text("Налаштування") }
+    }
+}
+
+/** A modal window over the main screen: title, content and a "Закрити" button. */
+@Composable
+private fun Modal(title: String, width: Dp, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            Modifier.width(width),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+        ) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                content()
+                HorizontalDivider(Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                Row {
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick = onClose) { Text("Закрити") }
+                }
+            }
         }
     }
 }
@@ -443,16 +486,14 @@ private fun chooseFolder(initial: String?): String? {
 // ---------------------------------------------------------------- connect
 
 @Composable
-private fun ConnectCard(
-    modifier: Modifier,
+private fun ConnectDialog(
     pin: String,
     addresses: List<NetUtil.LocalAddress>,
     addressesLoading: Boolean,
     port: Int,
     controller: AppController,
 ) {
-    SectionCard(modifier) {
-        CardTitle("Підключити телефон")
+    Modal("Підключити телефон", 640.dp, controller::closeDialog) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             val address = addresses.firstOrNull()?.address
             if (address != null && ApkResource.available) {
@@ -486,6 +527,26 @@ private fun ConnectCard(
         } else {
             Text("Комп'ютер не підключений до мережі", color = MaterialTheme.colorScheme.error)
         }
+        Spacer(Modifier.height(2.dp))
+        Muted("Телефон не знаходить комп'ютер? Дозвольте Sync Music у брандмауері Windows (попросить права адміністратора):")
+        FirewallButton(controller)
+    }
+}
+
+@Composable
+private fun FirewallButton(controller: AppController) {
+    var firewallStatus by remember { mutableStateOf<String?>(null) }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(
+            enabled = WindowsIntegration.isWindows,
+            onClick = {
+                firewallStatus = "Підтвердіть запит Windows…"
+                controller.openFirewall { ok ->
+                    firewallStatus = if (ok) "Готово: доступ у брандмауері відкрито" else "Не вдалося — запит відхилено"
+                }
+            },
+        ) { Text("Дозволити в брандмауері") }
+        firewallStatus?.let { Muted(it) }
     }
 }
 
@@ -516,11 +577,14 @@ private fun DevicesSection(settings: Settings, live: Map<String, LiveStatus>, co
     Text("Телефони", style = MaterialTheme.typography.titleLarge)
     if (settings.devices.isEmpty()) {
         SectionCard(Modifier.fillMaxWidth()) {
-            Text("Поки що жоден телефон не підключено", style = MaterialTheme.typography.titleSmall)
-            Muted(
-                "Встановіть застосунок на телефон і введіть код із блоку «Підключити телефон». " +
-                    "Якщо телефон не знаходить комп'ютер, натисніть «Дозволити в брандмауері» нижче.",
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Поки що жоден телефон не підключено", style = MaterialTheme.typography.titleSmall)
+                    Muted("Встановіть застосунок на телефон за QR-кодом і введіть код підключення.")
+                }
+                Spacer(Modifier.width(12.dp))
+                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+            }
         }
     } else {
         settings.devices.sortedByDescending { maxOf(it.lastSeen, live[it.id]?.receivedAt ?: 0L) }.forEach { device ->
@@ -683,10 +747,8 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
 // ---------------------------------------------------------------- settings
 
 @Composable
-private fun SettingsCard(settings: Settings, controller: AppController) {
-    var firewallStatus by remember { mutableStateOf<String?>(null) }
-    SectionCard(Modifier.fillMaxWidth()) {
-        CardTitle("Налаштування")
+private fun SettingsDialog(settings: Settings, controller: AppController) {
+    Modal("Налаштування", 560.dp, controller::closeDialog) {
         CheckRow(
             checked = settings.autostart,
             enabled = WindowsIntegration.canIntegrate,
@@ -699,20 +761,15 @@ private fun SettingsCard(settings: Settings, controller: AppController) {
             text = "Після закриття вікна працювати далі в треї",
             onChange = controller::setCloseToTray,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(
-                enabled = WindowsIntegration.isWindows,
-                onClick = {
-                    firewallStatus = "Підтвердіть запит Windows…"
-                    controller.openFirewall { ok ->
-                        firewallStatus = if (ok) "Готово: доступ у брандмауері відкрито" else "Не вдалося — запит відхилено"
-                    }
-                },
-            ) { Text("Дозволити в брандмауері") }
+        Spacer(Modifier.height(4.dp))
+        FirewallButton(controller)
+        Muted("Потрібно, якщо телефон не знаходить комп'ютер. Windows попросить права адміністратора.")
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Muted("Sync Music ${BuildInfo.version}")
+            Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = { openLog() }) { Text("Журнал") }
-            firewallStatus?.let { Muted(it) }
         }
-        Muted("Кнопка «Дозволити в брандмауері» потрібна, якщо телефон не знаходить комп'ютер. Windows попросить права адміністратора.")
     }
 }
 

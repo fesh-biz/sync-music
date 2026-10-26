@@ -50,6 +50,9 @@ sealed interface PairResult {
  */
 data class PhonePickerRequest(val folderId: String, val deviceId: String? = null, val isNew: Boolean = false)
 
+/** Modal windows of the main screen (the phone folder picker has its own request). */
+enum class MainDialog { CONNECT, SETTINGS }
+
 /** A synced folder with its scanner and change watcher. */
 class FolderRuntime(val folder: SyncFolder, val library: Library, val watcher: FolderWatcher)
 
@@ -85,6 +88,9 @@ class AppController {
 
     private val _phonePicker = MutableStateFlow<PhonePickerRequest?>(null)
     val phonePicker: StateFlow<PhonePickerRequest?> = _phonePicker.asStateFlow()
+
+    private val _dialog = MutableStateFlow<MainDialog?>(null)
+    val dialog: StateFlow<MainDialog?> = _dialog.asStateFlow()
 
     private val _addresses = MutableStateFlow<List<NetUtil.LocalAddress>?>(null)
     val addresses: StateFlow<List<NetUtil.LocalAddress>?> = _addresses.asStateFlow()
@@ -265,6 +271,14 @@ class AppController {
         _phonePicker.value = null
     }
 
+    fun openDialog(dialog: MainDialog) {
+        _dialog.value = dialog
+    }
+
+    fun closeDialog() {
+        _dialog.value = null
+    }
+
     private fun loadPhoneStorage(): Map<String, PhoneStorage> = try {
         if (phoneStorageFile.isFile) {
             Protocol.json.decodeFromString(MapSerializer(String.serializer(), PhoneStorage.serializer()), phoneStorageFile.readText())
@@ -425,6 +439,8 @@ class AppController {
             s.copy(devices = others + PairedDevice(request.deviceId, request.deviceName.take(60), token, now, lastSeen = now))
         }
         regeneratePin()
+        // The phone is connected: the "connect a phone" window has done its job.
+        _dialog.compareAndSet(MainDialog.CONNECT, null)
         AppLog.i("Paired device ${request.deviceName} (${request.deviceId})")
         _events.tryEmit("Телефон «${request.deviceName}» підключено")
         return PairResult.Ok(token)

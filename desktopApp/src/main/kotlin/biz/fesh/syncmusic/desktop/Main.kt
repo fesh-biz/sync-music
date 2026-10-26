@@ -186,6 +186,10 @@ private fun mirrorStatus(controller: AppController) {
                     // show-phone-picker|<name>[|new] / hide-phone-picker (screenshots of the dialog; "new" = as after adding)
                     "show-phone-picker" -> folderByName(parts[1])?.let { controller.openPhonePicker(it.id, isNew = parts.getOrNull(2) == "new") }
                     "hide-phone-picker" -> controller.closePhonePicker()
+                    // show-connect / show-settings / hide-dialog (screenshots of the modal windows)
+                    "show-connect" -> controller.openDialog(MainDialog.CONNECT)
+                    "show-settings" -> controller.openDialog(MainDialog.SETTINGS)
+                    "hide-dialog" -> controller.closeDialog()
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()
                     "quit" -> {

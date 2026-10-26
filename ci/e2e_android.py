@@ -435,6 +435,13 @@ def start_pc():
           f"server={st.get('server')} files={st.get('libraryFiles')} expected={len(expected_files())}")
     time.sleep(4)
     shot("00-pc-started")
+    pc_command("show-connect")
+    time.sleep(2)
+    shot("00a-pc-connect-dialog")
+    pc_command("show-settings")
+    time.sleep(2)
+    shot("00a-pc-settings-dialog")
+    pc_command("hide-dialog")
     folders = st.get("folders") or []
     if not st.get("devices") and folders:
         # The dialog shown right after "Додати папку" before any phone is connected: file types and direction.

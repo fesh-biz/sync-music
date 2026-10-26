@@ -58,6 +58,14 @@ WaitLog 'Window composed' 60 | Out-Null
 "First launch: window composed after $([int]$sw0.Elapsed.TotalMilliseconds) ms (wall clock)" | Out-File -Append (Join-Path $out 'win-notes.txt')
 Start-Sleep 6
 Shot 'win-1-first-launch'
+'show-connect' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 3
+Shot 'win-1b-connect-dialog'
+'show-settings' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 3
+Shot 'win-1c-settings-dialog'
+'hide-dialog' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 2
 
 # 2. Delete two files: the counter must follow without pressing anything
 Remove-Item -LiteralPath (Join-Path $music 'Артист 1\Альбом\1 Пісня.mp3')
