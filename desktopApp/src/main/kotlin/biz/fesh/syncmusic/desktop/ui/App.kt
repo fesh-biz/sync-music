@@ -1,6 +1,7 @@
 package biz.fesh.syncmusic.desktop.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -256,8 +257,9 @@ private fun FoldersCard(
         if (settings.folders.isEmpty()) {
             Muted("Поки що немає жодної папки. Натисніть «Додати папку».")
         }
-        settings.folders.forEachIndexed { index, folder ->
-            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (settings.folders.isNotEmpty()) Spacer(Modifier.height(4.dp))
+        // Each folder is its own bordered block, so where one folder ends and the next begins is obvious.
+        settings.folders.forEach { folder ->
             key(folder.id, runtimeVersion) {
                 FolderRow(folder, settings.devices, live, phoneStorage, controller, onRemove = { removing = folder })
             }
@@ -292,10 +294,17 @@ private fun FolderRow(
     onRemove: () -> Unit,
 ) {
     val stats by (controller.runtime(folder.id)?.library?.stats ?: emptyStats).collectAsState()
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(start = 18.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(folder.name, style = MaterialTheme.typography.titleSmall)
+                Text(folder.name, style = MaterialTheme.typography.titleMedium)
                 Muted(folder.path, maxLines = 1)
             }
             Spacer(Modifier.width(12.dp))
