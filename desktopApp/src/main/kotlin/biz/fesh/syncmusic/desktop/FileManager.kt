@@ -186,7 +186,7 @@ class FileManager(private val app: AppController) {
             var next: QueuedCommand? = first
             while (next != null) {
                 // Commands nobody waits for any more (the phone was away) are dropped.
-                if (System.currentTimeMillis() - next.at < STALE_MS || next.command.id in link.replies) result += next.command
+                if (System.currentTimeMillis() - next.at < STALE_MS || link.replies.containsKey(next.command.id)) result += next.command
                 next = link.queue.tryReceive().getOrNull()
             }
             return result
