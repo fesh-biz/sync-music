@@ -1,0 +1,43 @@
+2026-11-01 16:42:35.978 INFO Starting Sync Music 1.0.31
+2026-11-01 16:42:35.985 INFO Folders: [D:\a\sync-music\sync-music\win-music]
+2026-11-01 16:42:36.060 INFO Discovery listening on UDP 45455
+2026-11-01 16:42:36.071 INFO Watching D:\a\sync-music\sync-music\win-music (recursive)
+2026-11-01 16:42:36.109 INFO Network addresses [LocalAddress(address=10.1.0.117, interfaceName=Microsoft Hyper-V Network Adapter #4), LocalAddress(address=172.28.176.1, interfaceName=Hyper-V Virtual Ethernet Adapter)] in 62 ms
+2026-11-01 16:42:36.111 INFO Core started 509 ms after launch
+2026-11-01 16:42:36.125 INFO Scanned 40 files in 81 ms (was null)
+2026-11-01 16:42:36.961 INFO HTTP server on port 45456
+2026-11-01 16:42:37.594 INFO Folder win-music changed, rescanning
+2026-11-01 16:42:37.853 INFO Window composed 2327 ms after launch
+2026-11-01 16:42:44.743 INFO Test command: show-connect
+2026-11-01 16:42:47.763 INFO Test command: show-settings
+2026-11-01 16:42:50.781 INFO Test command: hide-dialog
+2026-11-01 16:42:52.793 INFO Test command: fm-open
+2026-11-01 16:42:52.853 INFO File window shown
+2026-11-01 16:42:56.832 INFO Test command: fm-close
+2026-11-01 16:42:58.849 INFO Test command: fm-theme|CLASSIC
+2026-11-01 16:43:01.871 INFO Test command: fm-theme|BRIGHT
+2026-11-01 16:43:05.156 INFO Folder win-music changed, rescanning
+2026-11-01 16:43:05.160 INFO Scanned 38 files in 4 ms (was 40)
+2026-11-01 16:43:06.671 INFO Folder win-music changed, rescanning
+2026-11-01 16:43:07.406 INFO Test command: hide
+2026-11-01 16:43:10.593 INFO Second launch: asking the running copy to show its window (200 ms after launch)
+2026-11-01 16:43:10.800 INFO Showing window on request
+2026-11-01 16:43:12.944 INFO Test command: quit
+2026-11-01 16:43:13.641 INFO Starting Sync Music 1.0.31
+2026-11-01 16:43:13.723 INFO Discovery listening on UDP 45455
+2026-11-01 16:43:13.735 INFO Watching D:\a\sync-music\sync-music\win-music (recursive)
+2026-11-01 16:43:13.771 INFO Network addresses [LocalAddress(address=10.1.0.117, interfaceName=Microsoft Hyper-V Network Adapter #4), LocalAddress(address=172.28.176.1, interfaceName=Hyper-V Virtual Ethernet Adapter)] in 60 ms
+2026-11-01 16:43:13.772 INFO Core started 478 ms after launch
+2026-11-01 16:43:13.793 INFO Scanned 38 files in 72 ms (was null)
+2026-11-01 16:43:14.569 INFO HTTP server on port 45456
+2026-11-01 16:43:15.322 INFO Window composed 2098 ms after launch
+2026-11-01 16:43:19.414 INFO Test command: quit
+2026-11-01 16:43:20.133 INFO Starting Sync Music 1.0.31
+2026-11-01 16:43:20.218 INFO Discovery listening on UDP 45455
+2026-11-01 16:43:20.231 INFO Watching D:\a\sync-music\sync-music\win-music (recursive)
+2026-11-01 16:43:20.264 INFO Network addresses [LocalAddress(address=10.1.0.117, interfaceName=Microsoft Hyper-V Network Adapter #4), LocalAddress(address=172.28.176.1, interfaceName=Hyper-V Virtual Ethernet Adapter)] in 56 ms
+2026-11-01 16:43:20.265 INFO Core started 506 ms after launch
+2026-11-01 16:43:20.282 INFO Scanned 38 files in 77 ms (was null)
+2026-11-01 16:43:21.028 INFO HTTP server on port 45456
+2026-11-01 16:43:21.736 INFO Window composed 2047 ms after launch
+2026-11-01 16:43:25.872 INFO Test command: quit

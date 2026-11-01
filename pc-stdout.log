@@ -1,0 +1,6 @@
+[SKIKO] warn: Fallback to next API
+org.jetbrains.skiko.RenderException: Cannot create Linux GL context
+[SKIKO] warn: Fallback to next API
+org.jetbrains.skiko.RenderException: Cannot create Linux GL context
+
+(SyncMusic:4338): dbind-WARNING **: 16:52:23.429: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
