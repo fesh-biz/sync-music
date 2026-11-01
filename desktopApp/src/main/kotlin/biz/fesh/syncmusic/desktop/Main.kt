@@ -19,6 +19,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import biz.fesh.syncmusic.desktop.ui.App
+import biz.fesh.syncmusic.desktop.ui.FilesScreen
 import biz.fesh.syncmusic.shared.Protocol
 import java.awt.Frame
 import java.io.File
@@ -33,6 +34,7 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.launch
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -142,6 +144,24 @@ fun main(args: Array<String>) {
             }
             App(controller)
         }
+
+        // The file window: PC and phone side by side.
+        val filesOpen by controller.files.open.collectAsState()
+        if (filesOpen) {
+            val filesState = rememberWindowState(width = 1240.dp, height = 840.dp, position = WindowPosition(Alignment.Center))
+            Window(
+                onCloseRequest = controller.files::closeWindow,
+                state = filesState,
+                title = "Sync Music — файли телефона",
+                icon = appIcon,
+            ) {
+                LaunchedEffect(Unit) {
+                    window.toFront()
+                    AppLog.i("File window shown")
+                }
+                FilesScreen(controller)
+            }
+        }
     }
 }
 
@@ -190,6 +210,23 @@ private fun mirrorStatus(controller: AppController) {
                     "show-connect" -> controller.openDialog(MainDialog.CONNECT)
                     "show-settings" -> controller.openDialog(MainDialog.SETTINGS)
                     "hide-dialog" -> controller.closeDialog()
+                    // File window: fm-open / fm-close, fm-pc|<PC folder>, fm-phone|<phone folder or empty>,
+                    // fm-list|<phone folder> (result in status.json), fm-to-phone|<PC file or folder>|<phone folder>,
+                    // fm-to-pc|<phone file or folder>|<PC folder>|<dir: true/false>, fm-theme|BRIGHT or CLASSIC
+                    "fm-open" -> controller.files.openWindow()
+                    "fm-close" -> controller.files.closeWindow()
+                    "fm-pc" -> controller.files.pcPath.value = parts.getOrNull(1)?.ifEmpty { null }
+                    "fm-phone" -> controller.files.phonePath.value = parts.getOrNull(1)?.ifEmpty { null }
+                    "fm-list" -> controller.scope.launch { controller.files.testList(parts.getOrElse(1) { "" }) }
+                    "fm-to-phone" -> controller.settings.value.devices.firstOrNull()?.let {
+                        controller.files.copyToPhone(it.id, listOf(File(parts[1])), parts[2])
+                    }
+                    "fm-to-pc" -> controller.settings.value.devices.firstOrNull()?.let {
+                        val path = parts[1]
+                        val name = path.trimEnd('/').substringAfterLast('/')
+                        controller.files.copyToPc(it.id, listOf(PhoneItem(path, name, parts.getOrNull(3) == "true", 0, 0)), File(parts[2]))
+                    }
+                    "fm-theme" -> controller.setTheme(UiTheme.valueOf(parts[1]))
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()
                     "quit" -> {
@@ -224,6 +261,7 @@ private fun mirrorStatus(controller: AppController) {
                         }
                     },
                 )
+                put("fm", fmStatus(controller))
                 put("addresses", controller.addresses.value?.joinToString(",") { it.address } ?: "")
                 put(
                     "devices",
@@ -252,6 +290,23 @@ private fun mirrorStatus(controller: AppController) {
             AppLog.w("status.json failed", t)
         }
         Thread.sleep(500)
+    }
+}
+
+private fun fmStatus(controller: AppController) = buildJsonObject {
+    val files = controller.files
+    val jobs = files.jobs.value
+    put("open", files.open.value)
+    put("online", controller.settings.value.devices.firstOrNull()?.let { files.isOnline(it.id) } ?: false)
+    put("jobs", jobs.size)
+    for (state in JobState.entries) put(state.name.lowercase(), jobs.count { it.state == state })
+    jobs.firstOrNull { it.state == JobState.FAILED }?.let { put("firstError", "${it.name}: ${it.error}") }
+    put("savedAs", buildJsonArray { jobs.mapNotNull { it.savedAs }.takeLast(20).forEach { add(it) } })
+    files.notice.value?.let { put("notice", it) }
+    files.lastTestList?.let { reply ->
+        put("listOk", reply.ok)
+        reply.error?.let { put("listError", it) }
+        put("listNames", buildJsonArray { (reply.entries.map { it.name } + reply.volumes.map { it.root }).forEach { add(it) } })
     }
 }
 

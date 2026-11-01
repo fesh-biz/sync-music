@@ -116,6 +116,9 @@ class AppController {
         env ?: host ?: "Комп'ютер"
     }
 
+    /** The file window: browsing the phone and copying files both ways. */
+    val files = FileManager(this)
+
     private val server = SyncServer(this)
     private val discovery = DiscoveryResponder { serverInfo() }
     private val lastPersist = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -131,6 +134,7 @@ class AppController {
             scope.launch(Dispatchers.IO) { WindowsIntegration.setAutostart(true) }
         }
         syncRuntimes()
+        files.start()
         startServer()
         discovery.start()
         // Network adapters change rarely; enumerating them can be slow on Windows, so do it off the UI thread.
@@ -454,6 +458,7 @@ class AppController {
     fun removeDevice(id: String) {
         settings.update { s -> s.copy(devices = s.devices.filter { it.id != id }) }
         _live.update { it - id }
+        files.forget(id)
         if (id in _phoneStorage.value) {
             _phoneStorage.update { it - id }
             savePhoneStorage()
@@ -493,6 +498,10 @@ class AppController {
 
     fun setCloseToTray(enabled: Boolean) {
         settings.update { it.copy(closeToTray = enabled) }
+    }
+
+    fun setTheme(theme: UiTheme) {
+        settings.update { it.copy(theme = theme) }
     }
 
     fun markTrayHintShown() {

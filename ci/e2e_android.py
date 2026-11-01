@@ -743,6 +743,114 @@ def scenario_docs():
     shot("20-docs-folder")
 
 
+def fm_status():
+    return status().get("fm") or {}
+
+
+def wait_fm_jobs(expected, timeout=180):
+    """Waits until [expected] copy jobs of the file window have finished; returns the fm status."""
+    end = time.time() + timeout
+    fm = {}
+    while time.time() < end:
+        fm = fm_status()
+        finished = sum(fm.get(k, 0) for k in ("done", "skipped", "failed", "cancelled"))
+        if finished >= expected and fm.get("waiting", 0) == 0 and fm.get("running", 0) == 0:
+            break
+        time.sleep(0.5)
+    return fm
+
+
+def pc_tree(root: Path):
+    return {p.relative_to(root).as_posix(): md5(p) for p in root.rglob("*") if p.is_file()}
+
+
+def scenario_files():
+    """File window on the PC: the phone turns its file access on while the window is open, lists its
+    folders, and files are copied both ways (folders with subfolders, nothing overwritten on the PC)."""
+    phone_dir = "/storage/emulated/0/Download/FM"
+    src = WORK / "fm-src"
+    write_file(src / "Пісня один.mp3", 3 * 1024 * 1024)
+    write_file(src / "readme.txt", 1_500)
+    write_file(src / "Альбом" / "02 трек.flac", 700_000)
+    write_file(src / "Thumbs.db", 300)  # junk is not copied
+
+    pc_command("fm-open")
+    adb("shell", "am", "start", "-n", ACTIVITY)
+    t0 = time.time()
+    while time.time() - t0 < 60 and not fm_status().get("online"):
+        time.sleep(0.5)
+    took = time.time() - t0
+    timing("Phone file access turns on after the PC's file window opens", f"{took:.1f} s")
+    if not check("Phone connects to the PC's file window", fm_status().get("online"), fm_status()):
+        shot("30-files-no-phone")
+        pc_command("fm-close")
+        return
+
+    pc_command("fm-list|")
+    time.sleep(3)
+    fm = fm_status()
+    check("Phone lists its storages", fm.get("listOk") and "/storage/emulated/0" in (fm.get("listNames") or []), fm)
+    pc_command("fm-list|/storage/emulated/0")
+    time.sleep(3)
+    fm = fm_status()
+    check("Phone lists a folder", fm.get("listOk") and "Download" in (fm.get("listNames") or []),
+          (fm.get("listNames") or [])[:10])
+    pc_command("fm-list|/data/data")
+    time.sleep(3)
+    check("Phone refuses folders outside its storages", fm_status().get("listOk") is False, fm_status().get("listError"))
+
+    pc_command(f"fm-pc|{src.parent}")
+    pc_command("fm-phone|/storage/emulated/0")
+    time.sleep(4)
+    shot("30-files-window")
+
+    # PC -> phone: a folder with a subfolder
+    t0 = time.time()
+    pc_command(f"fm-to-phone|{src}|{phone_dir}")
+    fm = wait_fm_jobs(3)
+    timing("File window: 3 files (3.7 MB) PC -> phone", f"{time.time() - t0:.1f} s")
+    check("File window copies a PC folder to the phone", fm.get("done") == 3 and fm.get("failed") == 0, fm)
+    verify_phone("file window copy", root=f"{phone_dir}/{src.name}", pc_root=src)
+    shot("31-files-copied-to-phone")
+
+    # The same again: nothing is copied twice
+    pc_command(f"fm-to-phone|{src}|{phone_dir}")
+    fm = wait_fm_jobs(3)
+    check("Copying the same files again skips them", fm.get("skipped") == 3 and fm.get("done") == 0, fm)
+
+    # Phone -> PC: a phone folder with a subfolder
+    staging = WORK / "fm-phone-staging"
+    write_file(staging / "Фото 1.jpg", 900_000)
+    write_file(staging / "Відео" / "clip.mp4", 2 * 1024 * 1024)
+    sh(f"rm -rf {q('/storage/emulated/0/Download/FMphone')}")
+    adb("push", str(staging) + "/.", "/storage/emulated/0/Download/FMphone")
+    dest = WORK / "fm-dest"
+    dest.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    pc_command(f"fm-to-pc|/storage/emulated/0/Download/FMphone|{dest}|true")
+    fm = wait_fm_jobs(2)
+    timing("File window: 2 files (2.9 MB) phone -> PC", f"{time.time() - t0:.1f} s")
+    got = pc_tree(dest / "FMphone")
+    want = pc_tree(staging)
+    check("File window copies a phone folder to the PC", fm.get("done") == 2 and got == want,
+          f"{fm} got={sorted(got)} want={sorted(want)}")
+
+    # A different file under a taken name: the PC keeps its own and saves the phone's as a copy
+    mine = dest / "FMphone" / "Фото 1.jpg"
+    write_file(mine, 1234, seed="pc's own photo")
+    own = md5(mine)
+    pc_command(f"fm-to-pc|/storage/emulated/0/Download/FMphone/Фото 1.jpg|{dest / 'FMphone'}|false")
+    fm = wait_fm_jobs(1)
+    copy = dest / "FMphone" / "Фото 1 (з телефона).jpg"
+    check("File window never overwrites a PC file", md5(mine) == own and copy.is_file() and md5(copy) == md5(staging / "Фото 1.jpg"),
+          f"{fm} files={sorted(p.name for p in (dest / 'FMphone').iterdir())}")
+    shot("32-files-copied-to-pc")
+
+    pc_command("fm-close")
+    time.sleep(1)
+    check("File window closes", not fm_status().get("open"))
+
+
 def scenario_pc_picks_phone_folder():
     """The phone folder is chosen in the PC app: the phone reports its folders, applies the choice
     on its next sync and moves the files there without downloading them again."""
@@ -1162,7 +1270,7 @@ def main():
         since = pair()
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume, scenario_pause,
-                         scenario_camera, scenario_docs, scenario_pc_picks_phone_folder, scenario_file_types, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
+                         scenario_camera, scenario_docs, scenario_files, scenario_pc_picks_phone_folder, scenario_file_types, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
                          scenario_remove_folder, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:
                 check(f"{scenario.__name__} not run: e2e time budget used up", False)

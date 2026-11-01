@@ -275,6 +275,7 @@ private class Session(
         }
         Log.i(TAG, "Folders: ${folders.size} in ${elapsed()} ms")
         reportStorage(api)
+        checkFileAccess(api)
         return sync(api, server)
     }
 
@@ -292,6 +293,17 @@ private class Session(
         } catch (e: Throwable) {
             // Older PC versions do not know this request; not needed for syncing.
             Log.i(TAG, "Storage not reported: ${e.message}")
+        }
+    }
+
+    /** The PC's file window is waiting for this phone: turn file access on (Android may refuse in the background). */
+    private suspend fun checkFileAccess(api: Api) {
+        try {
+            val wanted = withContext(Dispatchers.IO) { api.fmState()?.wanted == true }
+            if (wanted) biz.fesh.syncmusic.files.FileAccessService.start(ctx)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
         }
     }
 

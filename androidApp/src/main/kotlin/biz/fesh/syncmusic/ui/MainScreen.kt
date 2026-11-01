@@ -72,6 +72,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import biz.fesh.syncmusic.BuildConfig
 import biz.fesh.syncmusic.data.Config
 import biz.fesh.syncmusic.data.FolderMapping
@@ -83,6 +84,7 @@ import biz.fesh.syncmusic.net.FoundServer
 import biz.fesh.syncmusic.net.Http
 import biz.fesh.syncmusic.net.PairingException
 import biz.fesh.syncmusic.net.WifiNet
+import biz.fesh.syncmusic.files.FileAccessService
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderInfo
@@ -165,6 +167,18 @@ fun MainScreen() {
     val current = server
     LaunchedEffect(perms.storage, current?.serverId, current?.revoked) {
         if (perms.storage && current != null && !current.revoked) SyncWorker.syncNow(context)
+    }
+    // While the app is on screen it checks whether the PC's file window is open; if so, file access turns on
+    // (and stays on in the background until that window is closed).
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(perms.storage, current?.serverId, current?.revoked) {
+        if (!perms.storage || current == null || current.revoked) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                if (FileAccessService.pcWants(context)) FileAccessService.start(context)
+                delay(5_000)
+            }
+        }
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
@@ -288,12 +302,16 @@ private fun openBatterySettings(context: Context) {
 
 @Composable
 private fun Header() {
-    Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-        Text("Sync Music", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).clip(RoundedCornerShape(24.dp))
+            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Twilight, Indigo, Rose)))
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+    ) {
+        Text("Sync Music", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
         Text(
             "Синхронізація файлів з комп'ютером через Wi-Fi",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color.White.copy(alpha = 0.85f),
         )
     }
 }

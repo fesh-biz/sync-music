@@ -3,6 +3,9 @@ package biz.fesh.syncmusic.desktop
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FileTypes
+import biz.fesh.syncmusic.shared.FmPoll
+import biz.fesh.syncmusic.shared.FmReply
+import biz.fesh.syncmusic.shared.FmState
 import biz.fesh.syncmusic.shared.FolderList
 import biz.fesh.syncmusic.shared.PairRequest
 import biz.fesh.syncmusic.shared.PairResponse
@@ -14,6 +17,7 @@ import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.withCharset
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -37,7 +41,9 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
+import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -248,6 +254,81 @@ class SyncServer(private val app: AppController) {
                 val progress = call.receive<SyncProgress>()
                 app.onProgress(device.id, progress)
                 call.respond(HttpStatusCode.NoContent)
+            }
+
+            // ---------------- file window (see Files.kt in the shared module)
+
+            // Long poll of the phone's file access service: commands from the PC's file window.
+            get("/api/fm/poll") {
+                val device = call.requireDevice() ?: return@get
+                val wait = (call.request.queryParameters["wait"]?.toLongOrNull() ?: 20).coerceIn(0, 25)
+                val commands = app.files.poll(device.id, wait * 1000)
+                call.respond(FmPoll(commands, app.files.wanted(device.id)))
+            }
+
+            // Asked by the phone during a sync: should it turn its file access on?
+            get("/api/fm/state") {
+                val device = call.requireDevice() ?: return@get
+                call.respond(FmState(app.files.wanted(device.id)))
+            }
+
+            post("/api/fm/reply") {
+                val device = call.requireDevice() ?: return@post
+                app.files.onReply(device.id, call.receive<FmReply>())
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            // PC -> phone copy: only the file of a running copy job, by its id.
+            get("/api/fm/file") {
+                val device = call.requireDevice() ?: return@get
+                val id = call.request.queryParameters["id"].orEmpty()
+                val file = app.files.pullFile(device.id, id)
+                if (file == null || !file.isFile) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Копіювання вже не виконується"))
+                    return@get
+                }
+                val counter = app.files.counter(id)
+                val length = file.length()
+                call.respond(object : OutgoingContent.WriteChannelContent() {
+                    override val contentType: ContentType = ContentType.Application.OctetStream
+                    override val contentLength: Long = length
+
+                    override suspend fun writeTo(channel: ByteWriteChannel) {
+                        val input = withContext(Dispatchers.IO) { file.inputStream() }
+                        try {
+                            val buffer = ByteArray(256 * 1024)
+                            var left = length
+                            while (left > 0) {
+                                if (app.files.isCancelled(id)) throw java.io.IOException("cancelled")
+                                val n = withContext(Dispatchers.IO) { input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt()) }
+                                if (n < 0) throw java.io.IOException("Файл змінився під час копіювання")
+                                channel.writeFully(buffer, 0, n)
+                                left -= n
+                                counter?.addAndGet(n.toLong())
+                            }
+                            channel.flush()
+                        } finally {
+                            withContext(Dispatchers.IO) { input.close() }
+                        }
+                    }
+                })
+            }
+
+            // Phone -> PC copy: written only where the running copy job says, never over an existing file.
+            put("/api/fm/upload") {
+                val device = call.requireDevice() ?: return@put
+                val id = call.request.queryParameters["id"].orEmpty()
+                val channel = call.receiveChannel()
+                val error = withContext(Dispatchers.IO) {
+                    channel.toInputStream().use { input ->
+                        app.files.receiveUpload(device.id, id, call.request.queryParameters["size"]?.toLongOrNull(), input)
+                    }
+                }
+                if (error == null) {
+                    call.respond(HttpStatusCode.NoContent)
+                } else {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(error))
+                }
             }
 
             // Used by a second launch of the app to bring the existing window to front.

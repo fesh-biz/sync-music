@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +65,7 @@ import biz.fesh.syncmusic.desktop.PairedDevice
 import biz.fesh.syncmusic.desktop.ServerState
 import biz.fesh.syncmusic.desktop.Settings
 import biz.fesh.syncmusic.desktop.SyncFolder
+import biz.fesh.syncmusic.desktop.UiTheme
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.desktop.WindowsIntegration
@@ -92,7 +95,7 @@ fun App(controller: AppController) {
     val addresses = loadedAddresses.orEmpty()
     val addressesLoading = loadedAddresses == null
 
-    SyncMusicTheme {
+    SyncMusicTheme(settings.theme) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
@@ -122,6 +125,10 @@ private fun Header(
     hasPhones: Boolean,
     controller: AppController,
 ) {
+    if (LocalLook.current.bright) {
+        BrightHeader(serverState, computerName, addresses, addressesLoading, hasPhones, controller)
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
@@ -147,12 +154,82 @@ private fun Header(
         }
         Spacer(Modifier.width(10.dp))
         if (hasPhones) {
+            Button(onClick = { controller.files.openWindow() }) { Text("Файли телефона") }
+            Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
         } else {
             Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
         }
         Spacer(Modifier.width(8.dp))
         OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }) { Text("Налаштування") }
+    }
+}
+
+/** The bright look's banner: the scales mark on a twilight-to-rose gradient, actions on the right. */
+@Composable
+private fun BrightHeader(
+    serverState: ServerState,
+    computerName: String,
+    addresses: List<NetUtil.LocalAddress>,
+    addressesLoading: Boolean,
+    hasPhones: Boolean,
+    controller: AppController,
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(HeaderBrush)
+            .padding(start = 22.dp, end = 20.dp, top = 20.dp, bottom = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(64.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            ScalesLogo(44.dp, Color.White)
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Sync Music", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text(
+                "Комп'ютер і телефон у рівновазі: файли синхронізуються через Wi-Fi",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val (label, dot) = when (serverState) {
+                is ServerState.Running ->
+                    if (addresses.isNotEmpty() || addressesLoading) "Працює · $computerName" to Color(0xFF6CF0B0)
+                    else "Працює · немає мережі" to Color(0xFFFFC857)
+                ServerState.Starting -> "Запуск…" to Color.White
+                is ServerState.Failed -> serverState.message to Color(0xFFFF8A8A)
+            }
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.16f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+                Spacer(Modifier.width(8.dp))
+                Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val onBanner = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Palette.Twilight)
+            val ghost = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            val ghostBorder = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.6f))
+            if (hasPhones) {
+                Button(onClick = { controller.files.openWindow() }, colors = onBanner) { Text("Файли телефона") }
+            } else {
+                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = onBanner) { Text("Підключити телефон") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasPhones) {
+                    OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = ghost, border = ghostBorder) { Text("Підключити телефон") }
+                }
+                OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }, colors = ghost, border = ghostBorder) { Text("Налаштування") }
+            }
+        }
     }
 }
 
@@ -183,7 +260,7 @@ private fun Modal(title: String, width: Dp, onClose: () -> Unit, content: @Compo
 }
 
 @Composable
-private fun StatusPill(text: String, color: Color, background: Color) {
+internal fun StatusPill(text: String, color: Color, background: Color) {
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(background).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -212,7 +289,7 @@ private fun CardTitle(text: String) {
 }
 
 @Composable
-private fun Muted(text: String, maxLines: Int = Int.MAX_VALUE) {
+internal fun Muted(text: String, maxLines: Int = Int.MAX_VALUE) {
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
@@ -294,56 +371,64 @@ private fun FolderRow(
     onRemove: () -> Unit,
 ) {
     val stats by (controller.runtime(folder.id)?.library?.stats ?: emptyStats).collectAsState()
-    Column(
+    val look = LocalLook.current
+    // Bright look: a stripe on the left edge says which way the folder goes (violet-rose to the phone, teal to the PC).
+    Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .border(1.dp, if (look.bright) look.soft(folder.direction) else MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface)
-            .padding(start = 18.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(folder.name, style = MaterialTheme.typography.titleMedium)
-                Muted(folder.path, maxLines = 1)
+        if (look.bright) Box(Modifier.width(6.dp).fillMaxHeight().background(look.brush(folder.direction)))
+        Column(
+            Modifier.weight(1f)
+                .padding(start = 18.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(folder.name, style = MaterialTheme.typography.titleMedium)
+                    Muted(folder.path, maxLines = 1)
+                }
+                Spacer(Modifier.width(12.dp))
+                DirectionToggle(folder.direction) { controller.setDirection(folder.id, it) }
             }
-            Spacer(Modifier.width(12.dp))
-            DirectionToggle(folder.direction) { controller.setDirection(folder.id, it) }
-        }
-        FileTypesRow(folder, controller)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val summary = when {
-                stats.error != null -> stats.error!!
-                stats.scanning && stats.scannedAt == 0L -> "Сканування…"
-                else -> "${Format.files(stats.files)} · ${Format.bytes(stats.bytes)}"
-            }
-            Text(
-                summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (stats.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(220.dp),
-            )
-            if (folder.direction == Direction.TO_PHONE) {
-                Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
+            FileTypesRow(folder, controller)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val summary = when {
+                    stats.error != null -> stats.error!!
+                    stats.scanning && stats.scannedAt == 0L -> "Сканування…"
+                    else -> "${Format.files(stats.files)} · ${Format.bytes(stats.bytes)}"
+                }
                 Text(
-                    "Видаляти з телефона файли, видалені на ПК",
+                    summary,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
+                    color = if (stats.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(220.dp),
                 )
-            } else {
-                Text(
-                    "З комп'ютера нічого не видаляється",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).padding(start = 12.dp),
-                )
+                if (folder.direction == Direction.TO_PHONE) {
+                    Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
+                    Text(
+                        "Видаляти з телефона файли, видалені на ПК",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Text(
+                        "З комп'ютера нічого не видаляється",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f).padding(start = 12.dp),
+                    )
+                }
+                TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
             }
-            TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
-        }
-        val source = SyncProgressSource { d -> live[d.id]?.progress ?: d.lastProgress }
-        devices.sortedByDescending { it.lastSeen }.forEach { device ->
-            PhoneFolderLine(folder, device, devices.size > 1, source, phoneStorage[device.id]) {
-                controller.openPhonePicker(folder.id, device.id)
+            val source = SyncProgressSource { d -> live[d.id]?.progress ?: d.lastProgress }
+            devices.sortedByDescending { it.lastSeen }.forEach { device ->
+                PhoneFolderLine(folder, device, devices.size > 1, source, phoneStorage[device.id]) {
+                    controller.openPhonePicker(folder.id, device.id)
+                }
             }
         }
     }
@@ -447,11 +532,22 @@ internal fun FileTypesToggle(types: FileTypes, onChange: (FileTypes) -> Unit) {
 
 @Composable
 internal fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
-    Segmented(listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК"), direction, onChange)
+    val look = LocalLook.current
+    Segmented(
+        listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК"),
+        direction,
+        onChange,
+        selectedBrush = { look.brush(it) },
+    )
 }
 
 @Composable
-private fun <T> Segmented(options: List<Pair<T, String>>, current: T, onChange: (T) -> Unit) {
+internal fun <T> Segmented(
+    options: List<Pair<T, String>>,
+    current: T,
+    onChange: (T) -> Unit,
+    selectedBrush: ((T) -> Brush)? = null,
+) {
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp),
     ) {
@@ -460,7 +556,13 @@ private fun <T> Segmented(options: List<Pair<T, String>>, current: T, onChange: 
             Box(
                 Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .then(
+                        when {
+                            !selected -> Modifier
+                            selectedBrush != null -> Modifier.background(selectedBrush(value))
+                            else -> Modifier.background(MaterialTheme.colorScheme.primary)
+                        },
+                    )
                     .clickable(enabled = !selected) { onChange(value) }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             ) {
@@ -618,7 +720,7 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
                 Muted(statusLine(progress, syncing, lastSeen, now))
             }
             when {
-                syncing -> StatusPill("Синхронізація", Palette.Indigo, Palette.IndigoSoft)
+                syncing -> StatusPill("Синхронізація", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
                 progress?.phase == SyncPhase.ERROR && online -> StatusPill("Помилка", Palette.Red, Palette.RedSoft)
                 online && progress != null && progress.remainingFiles == 0 -> StatusPill("Усе синхронізовано", Palette.Green, Palette.GreenSoft)
                 online -> StatusPill("На зв'язку", Palette.Green, Palette.GreenSoft)
@@ -630,12 +732,16 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
             Muted("Телефон ще не синхронізувався. Синхронізація почнеться автоматично протягом кількох хвилин.")
         } else {
             Spacer(Modifier.height(2.dp))
-            LinearProgressIndicator(
-                progress = { progress.fraction },
-                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
-                color = if (progress.remainingFiles == 0) Palette.Green else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
+            if (LocalLook.current.bright) {
+                GradientBar(progress.fraction, if (progress.remainingFiles == 0) LocalLook.current.done else LocalLook.current.progress, 12.dp)
+            } else {
+                LinearProgressIndicator(
+                    progress = { progress.fraction },
+                    modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
+                    color = if (progress.remainingFiles == 0) Palette.Green else MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
                 Stat(
                     Modifier.weight(1f),
@@ -682,6 +788,7 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
         Row(verticalAlignment = Alignment.CenterVertically) {
             Muted("Підключено ${Format.moment(device.pairedAt, now)}")
             Spacer(Modifier.weight(1f))
+            TextButton(onClick = { controller.files.openWindow(device.id) }) { Text("Файли телефона") }
             TextButton(onClick = { confirmRemove = true }) { Text("Відключити телефон", color = MaterialTheme.colorScheme.error) }
         }
     }
@@ -758,6 +865,11 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
 @Composable
 private fun SettingsDialog(settings: Settings, controller: AppController) {
     Modal("Налаштування", 560.dp, controller::closeDialog) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Оформлення", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Segmented(listOf(UiTheme.BRIGHT to "Яскраве", UiTheme.CLASSIC to "Класичне"), settings.theme, controller::setTheme)
+        }
+        Spacer(Modifier.height(2.dp))
         CheckRow(
             checked = settings.autostart,
             enabled = WindowsIntegration.canIntegrate,
@@ -801,5 +913,17 @@ private fun openLog() {
         Desktop.getDesktop().open(file)
     } catch (t: Throwable) {
         AppLog.w("Cannot open log", t)
+    }
+}
+
+/** A rounded progress bar filled with a gradient (bright look). */
+@Composable
+internal fun GradientBar(fraction: Float, brush: Brush, height: Dp) {
+    Box(
+        Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        if (fraction > 0f) {
+            Box(Modifier.fillMaxWidth(fraction.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(brush))
+        }
     }
 }

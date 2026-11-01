@@ -49,6 +49,10 @@ data class PhoneTarget(
     val deleteOld: Boolean = false,
 )
 
+/** Look of the PC app: bright (default) or the earlier calm one. */
+@Serializable
+enum class UiTheme { BRIGHT, CLASSIC }
+
 @Serializable
 data class Settings(
     val serverId: String = UUID.randomUUID().toString(),
@@ -63,6 +67,7 @@ data class Settings(
     val closeToTray: Boolean = true,
     val trayHintShown: Boolean = false,
     val firstRunDone: Boolean = false,
+    val theme: UiTheme = UiTheme.BRIGHT,
 )
 
 class SettingsStore(private val file: File) {

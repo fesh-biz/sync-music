@@ -7,6 +7,9 @@ import android.net.NetworkCapabilities
 import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.FolderList
+import biz.fesh.syncmusic.shared.FmPoll
+import biz.fesh.syncmusic.shared.FmReply
+import biz.fesh.syncmusic.shared.FmState
 import biz.fesh.syncmusic.shared.UploadOffset
 import biz.fesh.syncmusic.shared.Manifest
 import biz.fesh.syncmusic.shared.ManifestEntry
@@ -258,6 +261,68 @@ class Api(
         val body = Protocol.json.encodeToString(SyncProgress.serializer(), progress).toRequestBody(jsonType)
         val client = http.newBuilder().connectTimeout(2, TimeUnit.SECONDS).readTimeout(4, TimeUnit.SECONDS).build()
         client.newCall(request(url("api/progress").build()).post(body).build()).execute().use { it.check() }
+    }
+
+    // ---------------- file window of the PC (see Files.kt in the shared module)
+
+    /** Long poll: waits up to [waitSeconds] for commands from the PC's file window. */
+    fun fmPoll(waitSeconds: Int): FmPoll {
+        val client = http.newBuilder().readTimeout(waitSeconds + 15L, TimeUnit.SECONDS).build()
+        val pollUrl = url("api/fm/poll").addQueryParameter("wait", waitSeconds.toString()).build()
+        return client.newCall(request(pollUrl).build()).execute().use { r ->
+            r.check()
+            r.parse(FmPoll.serializer())
+        }
+    }
+
+    /** Whether the PC's file window wants this phone; null for PC versions without the file window. */
+    fun fmState(): FmState? {
+        http.newCall(request(url("api/fm/state").build()).build()).execute().use { r ->
+            if (r.code == 404) return null
+            r.check()
+            return r.parse(FmState.serializer())
+        }
+    }
+
+    fun fmReply(reply: FmReply) {
+        val body = Protocol.json.encodeToString(FmReply.serializer(), reply).toRequestBody(jsonType)
+        http.newCall(request(url("api/fm/reply").build()).post(body).build()).execute().use { it.check() }
+    }
+
+    /** Downloads the file of the PC's copy job [id] into [part]. */
+    fun fmDownload(id: String, part: File) {
+        val client = http.newBuilder().readTimeout(90, TimeUnit.SECONDS).build()
+        val fileUrl = url("api/fm/file").addQueryParameter("id", id).build()
+        client.newCall(request(fileUrl).build()).execute().use { r ->
+            r.check()
+            val body = r.body ?: throw IOException("Empty body")
+            part.parentFile?.mkdirs()
+            FileOutputStream(part).use { out -> body.byteStream().copyTo(out, 256 * 1024) }
+        }
+    }
+
+    /** Sends [file] for the PC's copy job [id]. */
+    fun fmUpload(id: String, file: File) {
+        val size = file.length()
+        val uploadUrl = url("api/fm/upload").addQueryParameter("id", id).addQueryParameter("size", size.toString()).build()
+        val body = object : RequestBody() {
+            override fun contentType() = "application/octet-stream".toMediaType()
+            override fun contentLength() = size
+            override fun writeTo(sink: BufferedSink) {
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(256 * 1024)
+                    var left = size
+                    while (left > 0) {
+                        val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                        if (n < 0) throw IOException("файл змінився під час надсилання")
+                        sink.write(buffer, 0, n)
+                        left -= n
+                    }
+                }
+            }
+        }
+        val client = http.newBuilder().readTimeout(120, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
+        client.newCall(request(uploadUrl).put(body).build()).execute().use { it.check() }
     }
 
     /**

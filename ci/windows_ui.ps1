@@ -66,6 +66,16 @@ Start-Sleep 3
 Shot 'win-1c-settings-dialog'
 'hide-dialog' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
 Start-Sleep 2
+'fm-open' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 4
+Shot 'win-1d-files-window'
+'fm-close' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 2
+'fm-theme|CLASSIC' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 3
+Shot 'win-1e-classic-theme'
+'fm-theme|BRIGHT' | Out-File -Encoding utf8NoBOM (Join-Path $data 'command.txt')
+Start-Sleep 2
 
 # 2. Delete two files: the counter must follow without pressing anything
 Remove-Item -LiteralPath (Join-Path $music 'Артист 1\Альбом\1 Пісня.mp3')

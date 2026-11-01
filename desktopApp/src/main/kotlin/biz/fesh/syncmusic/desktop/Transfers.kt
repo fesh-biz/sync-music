@@ -44,7 +44,7 @@ object Transfers {
     private fun sha1(text: String): String =
         MessageDigest.getInstance("SHA-1").digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-    private fun tempDir(root: File): File {
+    fun tempDir(root: File): File {
         val dir = File(root, Protocol.TEMP_DIR)
         if (!dir.isDirectory) {
             dir.mkdirs()
@@ -108,16 +108,12 @@ object Transfers {
      * the target itself when the name is free, null when an identical file is already there
      * (under the name or as an earlier "(з телефона)" copy), otherwise the first free copy name.
      */
-    private fun destinationFor(target: File, received: File): File? {
+    fun destinationFor(target: File, received: File): File? {
         if (!target.exists()) return target
         if (sameContent(target, received)) return null
-        val dot = target.name.lastIndexOf('.')
-        val base = if (dot > 0) target.name.substring(0, dot) else target.name
-        val ext = if (dot > 0) target.name.substring(dot) else ""
         var n = 1
         while (true) {
-            val label = if (n == 1) "з телефона" else "з телефона $n"
-            val candidate = File(target.parentFile, "$base ($label)$ext")
+            val candidate = File(target.parentFile, biz.fesh.syncmusic.shared.FileNames.copyName(target.name, "з телефона", n))
             if (!candidate.exists()) return candidate
             if (sameContent(candidate, received)) return null
             n++

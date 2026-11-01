@@ -48,6 +48,12 @@
             android:name=".SyncActionReceiver"
             android:exported="false" />
 
+        <!-- Lets the PC app's file window browse the phone and copy files both ways. -->
+        <service
+            android:name=".files.FileAccessService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- WorkManager runs long syncs as a foreground service of type dataSync. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
