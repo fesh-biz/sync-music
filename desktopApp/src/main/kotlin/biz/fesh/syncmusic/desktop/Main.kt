@@ -19,6 +19,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import biz.fesh.syncmusic.desktop.ui.App
+import biz.fesh.syncmusic.desktop.ui.FilesKeys
 import biz.fesh.syncmusic.desktop.ui.FilesScreen
 import biz.fesh.syncmusic.shared.Protocol
 import java.awt.Frame
@@ -37,6 +38,9 @@ import kotlinx.serialization.json.put
 import kotlinx.coroutines.launch
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+
+/** Keys of the file window (Total Commander style); also pressed by test commands (fm-key). */
+private val filesKeys = FilesKeys()
 
 fun main(args: Array<String>) {
     val startMinimized = args.any { it == "--minimized" }
@@ -154,12 +158,13 @@ fun main(args: Array<String>) {
                 state = filesState,
                 title = "Sync Music — файли телефона",
                 icon = appIcon,
+                onPreviewKeyEvent = filesKeys::onKeyEvent,
             ) {
                 LaunchedEffect(Unit) {
                     window.toFront()
                     AppLog.i("File window shown")
                 }
-                FilesScreen(controller)
+                FilesScreen(controller, filesKeys)
             }
         }
     }
@@ -212,19 +217,43 @@ private fun mirrorStatus(controller: AppController) {
                     "hide-dialog" -> controller.closeDialog()
                     // File window: fm-open / fm-close, fm-pc|<PC folder>, fm-phone|<phone folder or empty>,
                     // fm-list|<phone folder> (result in status.json), fm-to-phone|<PC file or folder>|<phone folder>,
-                    // fm-to-pc|<phone file or folder>|<PC folder>|<dir: true/false>, fm-theme|BRIGHT or CLASSIC
+                    // fm-to-pc|<phone file or folder>|<PC folder>|<dir: true/false>[|move], fm-theme|BRIGHT or CLASSIC,
+                    // fm-to-phone|…|…|move, fm-delete-phone|<phone path>, fm-rename-phone|<phone path>|<new name>,
+                    // fm-key|<combination, e.g. F5, Shift+Down, Num+> (as if pressed in the file window)
                     "fm-open" -> controller.files.openWindow()
                     "fm-close" -> controller.files.closeWindow()
                     "fm-pc" -> controller.files.pcPath.value = parts.getOrNull(1)?.ifEmpty { null }
                     "fm-phone" -> controller.files.phonePath.value = parts.getOrNull(1)?.ifEmpty { null }
                     "fm-list" -> controller.scope.launch { controller.files.testList(parts.getOrElse(1) { "" }) }
                     "fm-to-phone" -> controller.settings.value.devices.firstOrNull()?.let {
-                        controller.files.copyToPhone(it.id, listOf(File(parts[1])), parts[2])
+                        controller.files.copyToPhone(it.id, listOf(File(parts[1])), parts[2], move = parts.getOrNull(3) == "move")
                     }
                     "fm-to-pc" -> controller.settings.value.devices.firstOrNull()?.let {
                         val path = parts[1]
                         val name = path.trimEnd('/').substringAfterLast('/')
-                        controller.files.copyToPc(it.id, listOf(PhoneItem(path, name, parts.getOrNull(3) == "true", 0, 0)), File(parts[2]))
+                        controller.files.copyToPc(
+                            it.id,
+                            listOf(PhoneItem(path, name, parts.getOrNull(3) == "true", 0, 0)),
+                            File(parts[2]),
+                            move = parts.getOrNull(4) == "move",
+                        )
+                    }
+                    "fm-delete-phone" -> controller.settings.value.devices.firstOrNull()?.let {
+                        controller.files.lastTestOp = null
+                        controller.scope.launch {
+                            controller.files.lastTestOp = controller.files.deletePhone(it.id, listOf(parts[1])) ?: "ok"
+                        }
+                    }
+                    "fm-rename-phone" -> controller.settings.value.devices.firstOrNull()?.let {
+                        controller.files.lastTestOp = null
+                        controller.scope.launch {
+                            val reply = controller.files.request(it.id, biz.fesh.syncmusic.shared.FmOp.RENAME, parts[1], name = parts[2])
+                            controller.files.lastTestOp = if (reply.ok) "ok" else reply.error ?: "error"
+                        }
+                    }
+                    "fm-key" -> {
+                        val combo = text.substringAfter('|')
+                        javax.swing.SwingUtilities.invokeLater { AppLog.i("fm-key $combo: " + filesKeys.press(combo)) }
                     }
                     "fm-theme" -> controller.setTheme(UiTheme.valueOf(parts[1]))
                     "show" -> controller.requestShowWindow()
@@ -303,6 +332,7 @@ private fun fmStatus(controller: AppController) = buildJsonObject {
     jobs.firstOrNull { it.state == JobState.FAILED }?.let { put("firstError", "${it.name}: ${it.error}") }
     put("savedAs", buildJsonArray { jobs.mapNotNull { it.savedAs }.takeLast(20).forEach { add(it) } })
     files.notice.value?.let { put("notice", it) }
+    files.lastTestOp?.let { put("lastOp", it) }
     files.lastTestList?.let { reply ->
         put("listOk", reply.ok)
         reply.error?.let { put("listError", it) }

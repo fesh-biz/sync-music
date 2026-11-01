@@ -846,9 +846,120 @@ def scenario_files():
           f"{fm} files={sorted(p.name for p in (dest / 'FMphone').iterdir())}")
     shot("32-files-copied-to-pc")
 
+    scenario_files_commander(src, dest)
+
     pc_command("fm-close")
     time.sleep(1)
     check("File window closes", not fm_status().get("open"))
+
+
+def phone_exists(path):
+    return sh(f"test -e {q(path)} && echo yes || echo no").strip() == "yes"
+
+
+def wait_until(fn, timeout=120):
+    end = time.time() + timeout
+    while time.time() < end:
+        if fn():
+            return True
+        time.sleep(1)
+    return False
+
+
+def wait_last_op(timeout=60):
+    end = time.time() + timeout
+    while time.time() < end:
+        op = fm_status().get("lastOp")
+        if op:
+            return op
+        time.sleep(0.5)
+    return None
+
+
+def scenario_files_commander(src, dest):
+    """Total Commander keys and file operations in the file window: keys move the cursor, mark,
+    create folders, copy to the other panel; rename, move and delete work on both sides."""
+    keys_dir = "/storage/emulated/0/Download/FMkeys"
+    sh(f"rm -rf {q(keys_dir)}; mkdir -p {q(keys_dir)}")
+    pc_command(f"fm-pc|{src}")
+    pc_command(f"fm-phone|{keys_dir}")
+    time.sleep(4)
+
+    # F7 + Enter in the PC panel: a new folder with the default name.
+    pc_command("fm-key|F7")
+    time.sleep(1)
+    shot("33-files-f7-dialog")
+    pc_command("fm-key|Enter")
+    time.sleep(2)
+    check("F7 + Enter creates a folder on the PC", (src / "Нова папка").is_dir(), sorted(p.name for p in src.iterdir()))
+    (src / "Нова папка").rmdir()
+    pc_command("fm-key|Ctrl+R")
+    time.sleep(2)
+
+    # Down from ".." onto the first folder (Альбом), Insert marks it, F5 + Enter copies it to the phone panel's folder.
+    pc_command("fm-key|Home")
+    pc_command("fm-key|Down")
+    pc_command("fm-key|Insert")
+    time.sleep(1)
+    shot("34-files-marked")
+    pc_command("fm-key|F5")
+    time.sleep(1)
+    shot("35-files-f5-dialog")
+    pc_command("fm-key|Enter")
+    ok = wait_until(lambda: phone_exists(f"{keys_dir}/Альбом/02 трек.flac"))
+    check("Insert + F5 + Enter copies the marked folder to the phone panel", ok, fm_status())
+
+    # Tab to the phone panel, F7 + Enter: a new folder on the phone.
+    pc_command("fm-key|Tab")
+    pc_command("fm-key|F7")
+    time.sleep(1)
+    pc_command("fm-key|Enter")
+    time.sleep(4)
+    check("Tab, F7 + Enter creates a folder on the phone", phone_exists(f"{keys_dir}/Нова папка"))
+
+    # Hotkeys dialog (F9) for the screenshot; Esc closes it.
+    pc_command("fm-key|F9")
+    time.sleep(2)
+    shot("36-files-hotkeys")
+    pc_command("fm-key|Esc")
+
+    # Rename on the phone
+    old = "/storage/emulated/0/Download/FMphone/Фото 1.jpg"
+    new = "/storage/emulated/0/Download/FMphone/Фото нове.jpg"
+    pc_command(f"fm-rename-phone|{old}|Фото нове.jpg")
+    op = wait_last_op()
+    check("Renaming a phone file", op == "ok" and phone_exists(new) and not phone_exists(old), op)
+
+    # Phone -> PC move: the files arrive on the PC and the phone folder is gone.
+    moved = WORK / "fm-moved"
+    moved.mkdir(parents=True, exist_ok=True)
+    pc_command(f"fm-to-pc|/storage/emulated/0/Download/FMphone|{moved}|true|move")
+    fm = wait_fm_jobs(2)
+    time.sleep(4)
+    got = sorted(pc_tree(moved / "FMphone"))
+    check("Moving a phone folder to the PC", got == ["Відео/clip.mp4", "Фото нове.jpg"] and fm.get("failed") == 0, f"{fm} got={got}")
+    check("Moved folder is gone from the phone", not phone_exists("/storage/emulated/0/Download/FMphone"))
+
+    # PC -> phone move: the files arrive on the phone; the PC ones go to the Recycle Bin where there is one.
+    msrc = WORK / "fm-move-src"
+    write_file(msrc / "a.mp3", 200_000)
+    write_file(msrc / "Диск 2" / "b.mp3", 300_000)
+    pc_command(f"fm-to-phone|{msrc}|{keys_dir}|move")
+    ok = wait_until(lambda: phone_exists(f"{keys_dir}/{msrc.name}/a.mp3") and phone_exists(f"{keys_dir}/{msrc.name}/Диск 2/b.mp3"))
+    time.sleep(3)
+    check("Moving a PC folder to the phone copies its files", ok, fm_status())
+    timing("PC files went to the Recycle Bin after the move (not supported on Linux)", str(not (msrc / "a.mp3").exists()))
+
+    # Delete on the phone: a file, then a whole folder.
+    pc_command("fm-delete-phone|" + f"{keys_dir}/Альбом/02 трек.flac")
+    op = wait_last_op()
+    check("Deleting a phone file", op == "ok" and not phone_exists(f"{keys_dir}/Альбом/02 трек.flac"), op)
+    pc_command(f"fm-delete-phone|{keys_dir}")
+    time.sleep(3)
+    check("Deleting a phone folder with everything inside", not phone_exists(keys_dir), fm_status().get("lastOp"))
+    pc_command("fm-delete-phone|/storage/emulated/0")
+    time.sleep(3)
+    check("A storage's root cannot be deleted", phone_exists("/storage/emulated/0/Download"), fm_status().get("lastOp"))
 
 
 def scenario_pc_picks_phone_folder():

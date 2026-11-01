@@ -3,6 +3,7 @@ package biz.fesh.syncmusic.desktop
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FileTypes
+import biz.fesh.syncmusic.shared.FmOps
 import biz.fesh.syncmusic.shared.FmPoll
 import biz.fesh.syncmusic.shared.FmReply
 import biz.fesh.syncmusic.shared.FmState
@@ -262,7 +263,8 @@ class SyncServer(private val app: AppController) {
             get("/api/fm/poll") {
                 val device = call.requireDevice() ?: return@get
                 val wait = (call.request.queryParameters["wait"]?.toLongOrNull() ?: 20).coerceIn(0, 25)
-                val commands = app.files.poll(device.id, wait * 1000)
+                val ops = call.request.queryParameters["ops"]?.toIntOrNull() ?: FmOps.BASIC
+                val commands = app.files.poll(device.id, wait * 1000, ops)
                 call.respond(FmPoll(commands, app.files.wanted(device.id)))
             }
 

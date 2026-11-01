@@ -10,7 +10,8 @@ import kotlinx.serialization.Serializable
  * POST /api/fm/reply:
  *  - LIST / TREE / MKDIR — the answer is an [FmReply];
  *  - PULL — the phone downloads the file the PC prepared (GET /api/fm/file?id=) into a phone folder;
- *  - PUSH — the phone sends one of its files to the PC (PUT /api/fm/upload?id=).
+ *  - PUSH — the phone sends one of its files to the PC (PUT /api/fm/upload?id=);
+ *  - DELETE / RENAME / PRUNE (phones that poll with ops >= [FmOps.FILE_OPS] only) — an [FmReply].
  * The PC serves and accepts only the files of copy jobs the user started in the PC app (by job id),
  * so the phone can neither read nor write anything else on the PC. Nothing is ever overwritten:
  * a different file under a taken name is saved as a copy next to it.
@@ -32,6 +33,33 @@ enum class FmOp {
 
     /** Phone → PC: send the phone file [FmCommand.path]. */
     PUSH,
+
+    /** Deletes the phone file or folder (with everything inside) [FmCommand.path]. */
+    DELETE,
+
+    /** Renames the phone file or folder [FmCommand.path] to [FmCommand.name] (same folder). */
+    RENAME,
+
+    /** Removes empty folders under [FmCommand.path] and the folder itself when it ends up empty (after a move). */
+    PRUNE,
+}
+
+/**
+ * What a phone's file access understands; sent as `ops=` with the long poll.
+ * Older phones send nothing and never get commands they cannot decode.
+ */
+object FmOps {
+    const val BASIC = 1
+
+    /** DELETE, RENAME and PRUNE. */
+    const val FILE_OPS = 2
+
+    const val CURRENT = FILE_OPS
+
+    fun needs(op: FmOp): Int = when (op) {
+        FmOp.DELETE, FmOp.RENAME, FmOp.PRUNE -> FILE_OPS
+        else -> BASIC
+    }
 }
 
 @Serializable
@@ -40,7 +68,7 @@ data class FmCommand(
     val op: FmOp,
     /** Absolute phone path (folder or, for PUSH, file). */
     val path: String = "",
-    /** PULL: name of the new file. */
+    /** PULL: name of the new file; RENAME: the new name. */
     val name: String = "",
     val size: Long = 0,
     /** Last-modified time, epoch millis. */

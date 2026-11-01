@@ -68,6 +68,8 @@ data class Settings(
     val trayHintShown: Boolean = false,
     val firstRunDone: Boolean = false,
     val theme: UiTheme = UiTheme.BRIGHT,
+    /** Key combinations of the file window changed by the user: action name → combinations (see Hotkeys.kt). */
+    val fmHotkeys: Map<String, List<String>> = emptyMap(),
 )
 
 class SettingsStore(private val file: File) {

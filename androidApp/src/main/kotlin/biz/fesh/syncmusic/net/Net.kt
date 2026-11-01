@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FolderInfo
 import biz.fesh.syncmusic.shared.FolderList
+import biz.fesh.syncmusic.shared.FmOps
 import biz.fesh.syncmusic.shared.FmPoll
 import biz.fesh.syncmusic.shared.FmReply
 import biz.fesh.syncmusic.shared.FmState
@@ -268,7 +269,10 @@ class Api(
     /** Long poll: waits up to [waitSeconds] for commands from the PC's file window. */
     fun fmPoll(waitSeconds: Int): FmPoll {
         val client = http.newBuilder().readTimeout(waitSeconds + 15L, TimeUnit.SECONDS).build()
-        val pollUrl = url("api/fm/poll").addQueryParameter("wait", waitSeconds.toString()).build()
+        val pollUrl = url("api/fm/poll")
+            .addQueryParameter("wait", waitSeconds.toString())
+            .addQueryParameter("ops", FmOps.CURRENT.toString())
+            .build()
         return client.newCall(request(pollUrl).build()).execute().use { r ->
             r.check()
             r.parse(FmPoll.serializer())

@@ -198,6 +198,9 @@ class FileAccessService : Service() {
             FmOp.LIST -> list(command)
             FmOp.TREE -> tree(command)
             FmOp.MKDIR -> mkdir(command)
+            FmOp.DELETE -> delete(command)
+            FmOp.RENAME -> rename(command)
+            FmOp.PRUNE -> prune(command)
             else -> FmReply(command.id, ok = false, error = "unsupported")
         }
     } catch (e: Throwable) {
@@ -259,6 +262,62 @@ class FileAccessService : Service() {
         val dir = File(command.path)
         if (dir.exists()) return FmReply(command.id, ok = false, error = "Така назва вже є")
         return if (dir.mkdirs()) FmReply(command.id) else FmReply(command.id, ok = false, error = "Не вдалося створити папку")
+    }
+
+    /** A storage's own root is never deleted, renamed or pruned. */
+    private fun isVolumeRoot(path: String): Boolean =
+        Storage.volumes(this).any { it.root.path.trimEnd('/') == path.trimEnd('/') }
+
+    private fun delete(command: FmCommand): FmReply {
+        if (!allowed(command.path) || isVolumeRoot(command.path)) return FmReply(command.id, ok = false, error = "Цю папку не можна видалити")
+        val target = File(command.path)
+        if (!target.exists()) return FmReply(command.id)
+        val removed = ArrayList<String>()
+        val ok = if (target.isDirectory) {
+            var all = true
+            target.walkBottomUp().forEach { f ->
+                if (f.isFile) {
+                    if (f.delete()) removed += f.path else all = false
+                } else if (!f.delete()) {
+                    all = false
+                }
+            }
+            all
+        } else {
+            target.delete().also { if (it) removed += target.path }
+        }
+        Storage.scan(this, removed.take(MAX_SCAN))
+        Log.i(TAG, "Deleted ${command.path} (${removed.size} files)")
+        return if (ok) FmReply(command.id) else FmReply(command.id, ok = false, error = "Не все вдалося видалити")
+    }
+
+    private fun rename(command: FmCommand): FmReply {
+        val name = command.name
+        if (!allowed(command.path) || isVolumeRoot(command.path) || !PhoneStorage.isValidName(name)) {
+            return FmReply(command.id, ok = false, error = "Недопустима назва")
+        }
+        val source = File(command.path)
+        if (!source.exists()) return FmReply(command.id, ok = false, error = "Файл не знайдено на телефоні")
+        val target = File(source.parentFile, name)
+        if (target.exists() && !target.path.equals(source.path, ignoreCase = true)) return FmReply(command.id, ok = false, error = "Така назва вже є")
+        if (!source.renameTo(target)) return FmReply(command.id, ok = false, error = "Не вдалося перейменувати")
+        if (target.isFile) Storage.scan(this, listOf(source.path, target.path))
+        return FmReply(command.id, savedAs = name)
+    }
+
+    private fun prune(command: FmCommand): FmReply {
+        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = "Ця папка недоступна")
+        val root = File(command.path)
+        if (!root.isDirectory) return FmReply(command.id)
+        val keepRoot = isVolumeRoot(command.path)
+        root.walkBottomUp().forEach { dir ->
+            if (dir.isDirectory && (dir != root || !keepRoot)) {
+                // Only folders left empty (or holding just the leftovers of copying) go.
+                File(dir, Protocol.TEMP_DIR).takeIf { it.isDirectory && it.list().isNullOrEmpty() }?.delete()
+                if (dir.list().isNullOrEmpty()) dir.delete()
+            }
+        }
+        return FmReply(command.id)
     }
 
     /** PC → phone. Nothing is overwritten: a different file under a taken name is saved as "name (з комп'ютера).ext". */
@@ -376,6 +435,7 @@ class FileAccessService : Service() {
         private const val ACTION_STOP = "biz.fesh.syncmusic.FILE_ACCESS_STOP"
         private const val POLL_SECONDS = 20
         private const val MAX_TREE = 50_000
+        private const val MAX_SCAN = 2_000
         private const val RESERVE_BYTES = 20L * 1024 * 1024
 
         /** Opened without the PC asking: stays on for a while, in case the file window is opened next. */

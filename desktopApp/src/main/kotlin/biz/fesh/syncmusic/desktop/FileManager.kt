@@ -3,6 +3,7 @@ package biz.fesh.syncmusic.desktop
 import biz.fesh.syncmusic.shared.FileNames
 import biz.fesh.syncmusic.shared.FmCommand
 import biz.fesh.syncmusic.shared.FmOp
+import biz.fesh.syncmusic.shared.FmOps
 import biz.fesh.syncmusic.shared.FmReply
 import biz.fesh.syncmusic.shared.Format
 import biz.fesh.syncmusic.shared.Protocol
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.awt.Desktop
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -49,6 +51,12 @@ data class CopyJob(
     val error: String? = null,
     /** The name the file got (differs when the name was taken by a different file). */
     val savedAs: String? = null,
+    /** Moving (F6): the source is removed once the copy is there (PC files go to the Recycle Bin). */
+    val move: Boolean = false,
+    /** Moving a folder: the source folder; its emptied subfolders are removed after the last file. */
+    val moveRoot: String? = null,
+    /** Opened with its Windows app once on the PC (viewing a phone file). */
+    val openWhenDone: Boolean = false,
 )
 
 /** A phone file or folder picked in the file window. */
@@ -60,6 +68,8 @@ private class QueuedCommand(val command: FmCommand, val at: Long)
 private class PhoneLink {
     val queue = Channel<QueuedCommand>(Channel.UNLIMITED)
     @Volatile var lastPoll = 0L
+    /** What the phone's app understands ([FmOps]). */
+    @Volatile var ops = FmOps.BASIC
     val polling = AtomicInteger(0)
     val replies = ConcurrentHashMap<String, CompletableDeferred<FmReply>>()
 }
@@ -101,6 +111,9 @@ class FileManager(private val app: AppController) {
 
     /** For automated tests: the last listing made with [testList]. */
     @Volatile var lastTestList: FmReply? = null
+
+    /** For automated tests: "ok" or the error of the last fm-delete-phone / fm-rename-phone. */
+    @Volatile var lastTestOp: String? = null
 
     private val counters = ConcurrentHashMap<String, AtomicLong>()
     private val pcFiles = ConcurrentHashMap<String, File>()
@@ -154,6 +167,10 @@ class FileManager(private val app: AppController) {
         _open.value = false
     }
 
+    fun showNotice(text: String) {
+        _notice.value = text
+    }
+
     fun clearNotice() {
         _notice.value = null
     }
@@ -176,8 +193,9 @@ class FileManager(private val app: AppController) {
         _open.value || _jobs.value.any { it.deviceId == deviceId && !it.state.finished }
 
     /** Long poll of the phone: waits up to [waitMs] for commands. */
-    suspend fun poll(deviceId: String, waitMs: Long): List<FmCommand> {
+    suspend fun poll(deviceId: String, waitMs: Long, ops: Int = FmOps.BASIC): List<FmCommand> {
         val link = link(deviceId)
+        link.ops = ops
         link.polling.incrementAndGet()
         link.lastPoll = System.currentTimeMillis()
         try {
@@ -206,15 +224,19 @@ class FileManager(private val app: AppController) {
         _jobs.update { list -> list.filter { it.deviceId != deviceId } }
     }
 
-    /** Runs a quick command (LIST, TREE, MKDIR) on the phone. */
-    suspend fun request(deviceId: String, op: FmOp, path: String, timeoutMs: Long = 20_000): FmReply {
+    /** The phone's app knows [op] (older versions only list and copy). */
+    fun supports(deviceId: String, op: FmOp): Boolean = (links[deviceId]?.ops ?: FmOps.BASIC) >= FmOps.needs(op)
+
+    /** Runs a quick command (LIST, TREE, MKDIR, DELETE, RENAME, PRUNE) on the phone. */
+    suspend fun request(deviceId: String, op: FmOp, path: String, timeoutMs: Long = 20_000, name: String = ""): FmReply {
         val id = UUID.randomUUID().toString()
         if (!isOnline(deviceId)) return FmReply(id, ok = false, error = OFFLINE)
+        if (!supports(deviceId, op)) return FmReply(id, ok = false, error = OLD_PHONE)
         val link = link(deviceId)
         val deferred = CompletableDeferred<FmReply>()
         link.replies[id] = deferred
         try {
-            link.queue.send(QueuedCommand(FmCommand(id, op, path), System.currentTimeMillis()))
+            link.queue.send(QueuedCommand(FmCommand(id, op, path, name), System.currentTimeMillis()))
             return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: FmReply(id, ok = false, error = "Телефон не відповідає")
         } finally {
             link.replies.remove(id)
@@ -229,13 +251,14 @@ class FileManager(private val app: AppController) {
     // ---------------------------------------------------------------- copying
 
     /** Copies PC files and folders (with everything inside) into the phone folder [phoneDir]. */
-    fun copyToPhone(deviceId: String, files: List<File>, phoneDir: String) {
+    fun copyToPhone(deviceId: String, files: List<File>, phoneDir: String, move: Boolean = false) {
         app.scope.launch(Dispatchers.IO) {
             val added = ArrayList<CopyJob>()
             for (file in files) {
                 if (file.isFile) {
-                    added += pcJob(deviceId, file, phoneDir)
+                    added += pcJob(deviceId, file, phoneDir).copy(move = move)
                 } else if (file.isDirectory) {
+                    val before = added.size
                     val base = file.toPath()
                     file.walkTopDown()
                         .onEnter { it == file || Protocol.isSyncableDir(it.name) }
@@ -244,11 +267,12 @@ class FileManager(private val app: AppController) {
                         .forEach { f ->
                             val rel = base.relativize(f.parentFile.toPath()).joinToString("/") { it.toString() }
                             val dir = phoneDir.trimEnd('/') + "/" + file.name + (if (rel.isEmpty()) "" else "/$rel")
-                            added += pcJob(deviceId, f, dir)
+                            added += pcJob(deviceId, f, dir).copy(move = move, moveRoot = if (move) file.absolutePath else null)
                         }
+                    if (move && added.size == before) pruneEmptyPc(file)
                 }
             }
-            enqueue(added, "з комп'ютера")
+            enqueue(added, if (move) "з комп'ютера (переміщення)" else "з комп'ютера")
         }
     }
 
@@ -264,12 +288,17 @@ class FileManager(private val app: AppController) {
     )
 
     /** Copies phone files and folders (with everything inside) into the PC folder [pcDir]. */
-    fun copyToPc(deviceId: String, items: List<PhoneItem>, pcDir: File) {
+    fun copyToPc(deviceId: String, items: List<PhoneItem>, pcDir: File, move: Boolean = false, open: Boolean = false) {
         app.scope.launch {
+            if (move && !supports(deviceId, FmOp.DELETE)) {
+                _notice.value = OLD_PHONE
+                return@launch
+            }
             val added = ArrayList<CopyJob>()
             for (item in items) {
                 if (!item.dir) {
                     added += phoneJob(deviceId, item.path, pcDir, FileNames.safeName(item.name), item.size, item.modified)
+                        .copy(move = move, openWhenDone = open)
                     continue
                 }
                 val tree = request(deviceId, FmOp.TREE, item.path, 120_000)
@@ -285,9 +314,11 @@ class FileManager(private val app: AppController) {
                     if (parts.isEmpty() || parts.any { it == "." || it == ".." }) continue
                     val dir = parts.dropLast(1).fold(root) { d, p -> File(d, FileNames.safeName(p)) }
                     added += phoneJob(deviceId, item.path.trimEnd('/') + "/" + entry.name, dir, FileNames.safeName(parts.last()), entry.size, entry.modified)
+                        .copy(move = move, moveRoot = if (move) item.path else null)
                 }
+                if (move && tree.entries.none { !it.dir }) request(deviceId, FmOp.PRUNE, item.path)
             }
-            enqueue(added, "з телефона")
+            enqueue(added, if (move) "з телефона (переміщення)" else "з телефона")
         }
     }
 
@@ -371,7 +402,64 @@ class FileManager(private val app: AppController) {
             it.copy(state = state, done = if (reply.ok) it.size else counter.get(), error = reply.error, savedAs = reply.savedAs)
         }
         if (state == JobState.FAILED) AppLog.w("Copy of ${job.source} failed: ${reply.error}")
+        if (state == JobState.DONE || state == JobState.SKIPPED) afterCopy(job, reply.savedAs ?: job.name)
+        if (job.moveRoot != null && _jobs.value.none { it.moveRoot == job.moveRoot && !it.state.finished }) {
+            if (job.toPhone) withContext(Dispatchers.IO) { pruneEmptyPc(File(job.moveRoot)) } else request(job.deviceId, FmOp.PRUNE, job.moveRoot)
+        }
         if (_jobs.value.none { !it.state.finished }) refreshPanels()
+    }
+
+    /** Moving: removes the source; viewing: opens the copy. */
+    private suspend fun afterCopy(job: CopyJob, savedAs: String) {
+        if (job.move) {
+            if (job.toPhone) {
+                val ok = withContext(Dispatchers.IO) { PcFiles.toRecycleBin(File(job.source)) }
+                if (!ok) _notice.value = "Файл «${job.name}» скопійовано, але не вдалося перемістити його в кошик на комп'ютері"
+            } else {
+                val reply = request(job.deviceId, FmOp.DELETE, job.source)
+                if (!reply.ok) _notice.value = "Файл «${job.name}» скопійовано, але на телефоні його не вдалося видалити: ${reply.error}"
+            }
+        }
+        if (job.openWhenDone) PcFiles.open(File(job.targetDir, savedAs))
+    }
+
+    /** Removes the empty folders left in [root] after moving its files (the folder itself too, when empty). */
+    private fun pruneEmptyPc(root: File) {
+        if (!root.isDirectory) return
+        root.walkBottomUp().forEach { dir ->
+            if (dir.isDirectory && dir.list().isNullOrEmpty()) dir.delete()
+        }
+    }
+
+    // ---------------------------------------------------------------- file operations
+
+    /** Deletes phone files and folders; returns the first error or null. */
+    suspend fun deletePhone(deviceId: String, paths: List<String>): String? {
+        var error: String? = null
+        for (path in paths) {
+            val reply = request(deviceId, FmOp.DELETE, path, 300_000)
+            if (!reply.ok && error == null) error = reply.error ?: "помилка"
+        }
+        AppLog.i("File window: deleted ${paths.size} items on the phone")
+        refreshPanels()
+        return error
+    }
+
+    /** Puts PC files and folders into the Recycle Bin; returns the first error or null. */
+    suspend fun deletePc(files: List<File>): String? = withContext(Dispatchers.IO) {
+        var error: String? = null
+        for (file in files) {
+            if (!PcFiles.toRecycleBin(file) && error == null) error = "Не вдалося перемістити «${file.name}» у кошик"
+        }
+        AppLog.i("File window: ${files.size} items to the Recycle Bin")
+        refreshPanels()
+        error
+    }
+
+    /** Copies a phone file into a temporary folder and opens it with its Windows app. */
+    fun viewPhoneFile(deviceId: String, item: PhoneItem) {
+        val dir = File(System.getProperty("java.io.tmpdir"), "SyncMusic-перегляд")
+        copyToPc(deviceId, listOf(item), dir, open = true)
     }
 
     private suspend fun toPhone(job: CopyJob): FmReply {
@@ -494,9 +582,51 @@ class FileManager(private val app: AppController) {
 
     companion object {
         const val OFFLINE = "Телефон не на зв'язку"
+        const val OLD_PHONE = "Оновіть Sync Music на телефоні: ця версія вміє лише копіювати файли"
         private const val STALE_MS = 60_000L
         private const val STALL_MS = 60_000L
         private const val MAX_JOBS = 100_000
         private const val RESERVE_BYTES = 50L * 1024 * 1024
+    }
+}
+
+/** The PC side of deleting and opening files from the file window. */
+object PcFiles {
+    /** Moves [file] (or a whole folder) into the Recycle Bin; never deletes for good. */
+    fun toRecycleBin(file: File): Boolean {
+        if (!file.exists()) return true
+        return try {
+            Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH) &&
+                Desktop.getDesktop().moveToTrash(file)
+        } catch (e: Throwable) {
+            AppLog.w("Cannot move ${file.path} to the Recycle Bin", e)
+            false
+        }
+    }
+
+    val canRecycle: Boolean by lazy {
+        try {
+            Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /** Opens [file] with its Windows app ([edit]: the editing app when there is one). Returns an error or null. */
+    fun open(file: File, edit: Boolean = false): String? = try {
+        val desktop = Desktop.getDesktop()
+        if (edit && desktop.isSupported(Desktop.Action.EDIT)) {
+            try {
+                desktop.edit(file)
+            } catch (_: Exception) {
+                desktop.open(file)
+            }
+        } else {
+            desktop.open(file)
+        }
+        null
+    } catch (e: Throwable) {
+        AppLog.w("Cannot open ${file.path}", e)
+        "Не вдалося відкрити «${file.name}»"
     }
 }
