@@ -1,5 +1,9 @@
 package biz.fesh.syncmusic.ui
 
+import biz.fesh.syncmusic.Notifications
+import biz.fesh.syncmusic.shared.I18n
+import biz.fesh.syncmusic.shared.Lang
+import biz.fesh.syncmusic.shared.tr
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -187,15 +191,20 @@ fun MainScreen() {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item { Header() }
+            item {
+                Header { lang ->
+                    config.setLanguage(lang)
+                    Notifications.createChannels(context) // channel names in the new language
+                }
+            }
 
             if (!perms.storage) {
                 item {
                     NoticeCard(
-                        title = "Дозвольте доступ до пам'яті",
-                        text = "Файли зберігаються в папках, які ви вибираєте, — у пам'яті телефона або на SD-карті. " +
-                            "Для цього Android вимагає дозвіл «Доступ до всіх файлів».",
-                        button = "Дозволити",
+                        title = tr("Дозвольте доступ до пам'яті", "Разрешите доступ к памяти"),
+                        text = tr("Файли зберігаються в папках, які ви вибираєте, — у пам'яті телефона або на SD-карті. ", "Файлы хранятся в папках, которые вы выбираете, — в памяти телефона или на SD-карте. ") +
+                            tr("Для цього Android вимагає дозвіл «Доступ до всіх файлів».", "Для этого Android требует разрешение «Доступ ко всем файлам»."),
+                        button = tr("Дозволити", "Разрешить"),
                     ) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             openStorageSettings(context)
@@ -208,18 +217,18 @@ fun MainScreen() {
             if (!perms.battery) {
                 item {
                     NoticeCard(
-                        title = "Дозвольте роботу у фоні",
-                        text = "Без цього Android може не запускати синхронізацію, поки застосунок закритий.",
-                        button = "Дозволити",
+                        title = tr("Дозвольте роботу у фоні", "Разрешите работу в фоне"),
+                        text = tr("Без цього Android може не запускати синхронізацію, поки застосунок закритий.", "Без этого Android может не запускать синхронизацию, пока приложение закрыто."),
+                        button = tr("Дозволити", "Разрешить"),
                     ) { openBatterySettings(context) }
                 }
             }
             if (!perms.notifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 item {
                     NoticeCard(
-                        title = "Сповіщення",
-                        text = "Щоб бачити перебіг завантаження і підсумок синхронізації.",
-                        button = "Увімкнути",
+                        title = tr("Сповіщення", "Уведомления"),
+                        text = tr("Щоб бачити перебіг завантаження і підсумок синхронізації.", "Чтобы видеть ход загрузки и итог синхронизации."),
+                        button = tr("Увімкнути", "Включить"),
                     ) { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                 }
             }
@@ -301,15 +310,41 @@ private fun openBatterySettings(context: Context) {
 }
 
 @Composable
-private fun Header() {
+private fun Header(onLanguage: (Lang) -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).clip(RoundedCornerShape(24.dp))
             .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Twilight, Indigo, Rose)))
             .padding(horizontal = 20.dp, vertical = 18.dp),
     ) {
-        Text("Sync Music", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Sync Music",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.weight(1f),
+            )
+            // Language switch: "УКР | РУС", the current one highlighted.
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f)).padding(2.dp),
+            ) {
+                for (lang in Lang.entries) {
+                    val on = lang == I18n.lang
+                    Text(
+                        if (lang == Lang.UK) "УКР" else "РУС",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                        color = if (on) Indigo else Color.White,
+                        modifier = Modifier.clip(RoundedCornerShape(50))
+                            .background(if (on) Color.White else Color.Transparent)
+                            .clickable(enabled = !on) { onLanguage(lang) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
         Text(
-            "Синхронізація файлів з комп'ютером через Wi-Fi",
+            tr("Синхронізація файлів з комп'ютером через Wi-Fi", "Синхронизация файлов с компьютером через Wi-Fi"),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.85f),
         )
@@ -376,7 +411,7 @@ private fun PairingCard(config: Config) {
             error = null
             val network = WifiNet.find(context)
             if (network == null) {
-                error = "Підключіться до тієї самої Wi-Fi мережі, що й комп'ютер."
+                error = tr("Підключіться до тієї самої Wi-Fi мережі, що й комп'ютер.", "Подключитесь к той же Wi-Fi сети, что и компьютер.")
             } else {
                 found = Discovery.discover(context, network, 3_000)
                 if (found.size == 1) selected = found.first()
@@ -399,7 +434,7 @@ private fun PairingCard(config: Config) {
                 val info = withContext(Dispatchers.IO) { Api(Http.client(network), host, port).info() }
                 selected = FoundServer(host, info)
             } catch (e: Throwable) {
-                error = "Не вдалося підключитися до $host. Перевірте адресу і що Sync Music запущено на комп'ютері."
+                error = tr("Не вдалося підключитися до $host. Перевірте адресу і що Sync Music запущено на комп'ютері.", "Не удалось подключиться к $host. Проверьте адрес и что Sync Music запущен на компьютере.")
             } finally {
                 busy = false
             }
@@ -428,10 +463,10 @@ private fun PairingCard(config: Config) {
                 if (config.autoSync.value) SyncWorker.schedulePeriodic(context)
                 SyncWorker.syncNow(context)
             } catch (e: PairingException) {
-                error = (e.message ?: "Невірний код") + ". Перевірте код на екрані комп'ютера."
+                error = (e.message ?: tr("Невірний код", "Неверный код")) + tr(". Перевірте код на екрані комп'ютера.", ". Проверьте код на экране компьютера.")
                 pin = ""
             } catch (e: Throwable) {
-                error = "Не вдалося підключитися: ${e.message}"
+                error = tr("Не вдалося підключитися: ${e.message}", "Не удалось подключиться: ${e.message}")
             } finally {
                 busy = false
             }
@@ -443,14 +478,14 @@ private fun PairingCard(config: Config) {
     SectionCard {
         val target = selected
         if (target == null) {
-            Text("Підключення до комп'ютера", style = MaterialTheme.typography.titleMedium)
-            Muted("Запустіть Sync Music на комп'ютері. Телефон і комп'ютер мають бути в одній Wi-Fi мережі.")
+            Text(tr("Підключення до комп'ютера", "Подключение к компьютеру"), style = MaterialTheme.typography.titleMedium)
+            Muted(tr("Запустіть Sync Music на комп'ютері. Телефон і комп'ютер мають бути в одній Wi-Fi мережі.", "Запустите Sync Music на компьютере. Телефон и компьютер должны быть в одной Wi-Fi сети."))
 
             if (searching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Muted("Шукаємо комп'ютер…")
+                    Muted(tr("Шукаємо комп'ютер…", "Ищем компьютер…"))
                 }
             }
             found.forEach { server ->
@@ -473,22 +508,22 @@ private fun PairingCard(config: Config) {
                         Text(server.info.serverName, style = MaterialTheme.typography.titleSmall)
                         Muted(server.host)
                     }
-                    Text("Вибрати", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    Text(tr("Вибрати", "Выбрать"), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
             }
             if (searched && !searching && found.isEmpty() && error == null) {
                 Muted(
-                    "Комп'ютер не знайдено. Перевірте, що Sync Music відкрито на ПК, і натисніть «Шукати знову». " +
-                        "Якщо не допомогло — у програмі на ПК натисніть «Дозволити в брандмауері».",
+                    tr("Комп'ютер не знайдено. Перевірте, що Sync Music відкрито на ПК, і натисніть «Шукати знову». ", "Компьютер не найден. Проверьте, что Sync Music открыт на ПК, и нажмите «Искать снова». ") +
+                        tr("Якщо не допомогло — у програмі на ПК натисніть «Дозволити в брандмауері».", "Если не помогло — в программе на ПК нажмите «Разрешить в брандмауэре»."),
                 )
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             Button(onClick = { search() }, enabled = !searching) {
-                Text(if (searched) "Шукати знову" else "Знайти комп'ютер")
+                Text(if (searched) tr("Шукати знову", "Искать снова") else tr("Знайти комп'ютер", "Найти компьютер"))
             }
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            Muted("Або введіть адресу, показану в програмі на комп'ютері:")
+            Muted(tr("Або введіть адресу, показану в програмі на комп'ютері:", "Или введите адрес, показанный в программе на компьютере:"))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = manualHost,
@@ -499,11 +534,11 @@ private fun PairingCard(config: Config) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = { checkManual() }, enabled = !busy && manualHost.isNotBlank()) { Text("ОК") }
+                OutlinedButton(onClick = { checkManual() }, enabled = !busy && manualHost.isNotBlank()) { Text(tr("ОК", "ОК")) }
             }
         } else {
-            Text("Комп'ютер «${target.info.serverName}»", style = MaterialTheme.typography.titleMedium)
-            Muted("Введіть 6-значний код із вікна Sync Music на комп'ютері.")
+            Text(tr("Комп'ютер «${target.info.serverName}»", "Компьютер «${target.info.serverName}»"), style = MaterialTheme.typography.titleMedium)
+            Muted(tr("Введіть 6-значний код із вікна Sync Music на комп'ютері.", "Введите 6-значный код из окна Sync Music на компьютере."))
             OutlinedTextField(
                 value = pin,
                 onValueChange = { value -> pin = value.filter(Char::isDigit).take(6) },
@@ -518,13 +553,13 @@ private fun PairingCard(config: Config) {
                 TextButton(onClick = {
                     selected = null
                     error = null
-                }) { Text("Назад") }
+                }) { Text(tr("Назад", "Назад")) }
                 Spacer(Modifier.weight(1f))
                 if (busy) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                 }
-                Button(onClick = { pair(target) }, enabled = pin.length == 6 && !busy) { Text("Підключити") }
+                Button(onClick = { pair(target) }, enabled = pin.length == 6 && !busy) { Text(tr("Підключити", "Подключить")) }
             }
         }
     }
@@ -538,9 +573,9 @@ private fun Dot(color: Color) {
 @Composable
 private fun RevokedCard(server: PairedServer, config: Config) {
     SectionCard {
-        Text("Комп'ютер «${server.serverName}» відключив цей телефон", style = MaterialTheme.typography.titleMedium)
-        Muted("Файли на телефоні залишилися. Щоб знову синхронізуватися, підключіться за кодом.")
-        Button(onClick = { config.setServer(null) }) { Text("Підключитися знову") }
+        Text(tr("Комп'ютер «${server.serverName}» відключив цей телефон", "Компьютер «${server.serverName}» отключил этот телефон"), style = MaterialTheme.typography.titleMedium)
+        Muted(tr("Файли на телефоні залишилися. Щоб знову синхронізуватися, підключіться за кодом.", "Файлы на телефоне остались. Чтобы снова синхронизироваться, подключитесь по коду."))
+        Button(onClick = { config.setServer(null) }) { Text(tr("Підключитися знову", "Подключиться снова")) }
     }
 }
 
@@ -548,9 +583,9 @@ private fun RevokedCard(server: PairedServer, config: Config) {
 private fun UpdateCard(server: PairedServer) {
     val context = LocalContext.current
     NoticeCard(
-        title = "Доступна нова версія",
-        text = "На комп'ютері встановлено новішу версію Sync Music. Оновіть застосунок на телефоні.",
-        button = "Завантажити оновлення",
+        title = tr("Доступна нова версія", "Доступна новая версия"),
+        text = tr("На комп'ютері встановлено новішу версію Sync Music. Оновіть застосунок на телефоні.", "На компьютере установлена более новая версия Sync Music. Обновите приложение на телефоне."),
+        button = tr("Завантажити оновлення", "Скачать обновление"),
     ) {
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://${server.host}:${server.port}/app.apk")))
@@ -597,7 +632,7 @@ private fun StatusCard(
                 Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("ПК", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(tr("ПК", "ПК"), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -616,20 +651,20 @@ private fun StatusCard(
             Row(Modifier.fillMaxWidth()) {
                 Stat(
                     Modifier.weight(1f),
-                    "Синхронізовано",
-                    "${Format.number(progress.syncedFiles.toLong())} з ${Format.number(progress.totalFiles.toLong())}",
-                    "${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)}",
+                    tr("Синхронізовано", "Синхронизировано"),
+                    tr("${Format.number(progress.syncedFiles.toLong())} з ${Format.number(progress.totalFiles.toLong())}", "${Format.number(progress.syncedFiles.toLong())} из ${Format.number(progress.totalFiles.toLong())}"),
+                    tr("${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)}", "${Format.bytes(progress.syncedBytes)} из ${Format.bytes(progress.totalBytes)}"),
                 )
                 Stat(
                     Modifier.weight(1f),
-                    "Залишилось",
+                    tr("Залишилось", "Осталось"),
                     if (progress.remainingFiles == 0) "0" else Format.files(progress.remainingFiles),
-                    if (progress.remainingFiles == 0) "усе на місці" else Format.bytes(progress.remainingBytes),
+                    if (progress.remainingFiles == 0) tr("усе на місці", "всё на месте") else Format.bytes(progress.remainingBytes),
                 )
             }
             if (running && !paused && (progress.phase == SyncPhase.DOWNLOADING || progress.phase == SyncPhase.UPLOADING)) {
                 val file = progress.currentFile?.substringAfterLast('/')
-                if (file != null) Muted((if (progress.phase == SyncPhase.UPLOADING) "Надсилається: " else "Отримується: ") + file, maxLines = 1)
+                if (file != null) Muted((if (progress.phase == SyncPhase.UPLOADING) tr("Надсилається: ", "Отправка: ") else tr("Отримується: ", "Получение: ")) + file, maxLines = 1)
                 val eta = Format.eta(progress.remainingBytes, progress.bytesPerSecond)
                 if (progress.bytesPerSecond > 0) Muted(Format.speed(progress.bytesPerSecond) + (eta?.let { " · $it" } ?: ""))
             }
@@ -639,8 +674,8 @@ private fun StatusCard(
             engine.note?.let { Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium) }
         }
         if (paused) {
-            Muted("Поки синхронізацію призупинено, вона не запускається ні автоматично, ні під час відкриття застосунку. " +
-                "Недокачаний файл продовжить завантажуватися з того самого місця.")
+            Muted(tr("Поки синхронізацію призупинено, вона не запускається ні автоматично, ні під час відкриття застосунку. ", "Пока синхронизация приостановлена, она не запускается ни автоматически, ни при открытии приложения. ") +
+                tr("Недокачаний файл продовжить завантажуватися з того самого місця.", "Недокачанный файл продолжит загружаться с того же места."))
         }
 
         when {
@@ -648,38 +683,38 @@ private fun StatusCard(
                 onClick = { SyncEngine.resume(context) },
                 enabled = hasStorage,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Продовжити синхронізацію") }
+            ) { Text(tr("Продовжити синхронізацію", "Продолжить синхронизацию")) }
             running -> OutlinedButton(
                 onClick = { SyncEngine.pause(context) },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Пауза") }
+            ) { Text(tr("Пауза", "Пауза")) }
             else -> Button(
                 onClick = { SyncWorker.syncNow(context) },
                 enabled = hasStorage,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Синхронізувати зараз") }
+            ) { Text(tr("Синхронізувати зараз", "Синхронизировать сейчас")) }
         }
     }
 }
 
 private fun statusText(running: Boolean, paused: Boolean, progress: SyncProgress?, lastSync: LastSync?, now: Long): String {
-    if (paused) return if (running) "Призупинення…" else "Синхронізацію призупинено"
+    if (paused) return if (running) tr("Призупинення…", "Приостановка…") else tr("Синхронізацію призупинено", "Синхронизация приостановлена")
     if (running) {
         return when (progress?.phase) {
-            null, SyncPhase.CONNECTING -> "Підключення до комп'ютера…"
-            SyncPhase.COMPARING -> "Порівняння файлів…"
-            SyncPhase.DOWNLOADING -> "Отримання файлів з комп'ютера…"
-            SyncPhase.UPLOADING -> "Надсилання файлів на комп'ютер…"
-            SyncPhase.DELETING -> "Видалення файлів, видалених у джерелі…"
-            else -> "Синхронізація…"
+            null, SyncPhase.CONNECTING -> tr("Підключення до комп'ютера…", "Подключение к компьютеру…")
+            SyncPhase.COMPARING -> tr("Порівняння файлів…", "Сравнение файлов…")
+            SyncPhase.DOWNLOADING -> tr("Отримання файлів з комп'ютера…", "Получение файлов с компьютера…")
+            SyncPhase.UPLOADING -> tr("Надсилання файлів на комп'ютер…", "Отправка файлов на компьютер…")
+            SyncPhase.DELETING -> tr("Видалення файлів, видалених у джерелі…", "Удаление файлов, удалённых в источнике…")
+            else -> tr("Синхронізація…", "Синхронизация…")
         }
     }
-    if (lastSync == null) return "Ще не синхронізувалося"
+    if (lastSync == null) return tr("Ще не синхронізувалося", "Ещё не синхронизировалось")
     val moment = Format.moment(lastSync.at, now)
     return when (lastSync.phase) {
-        SyncPhase.DONE -> if (lastSync.syncedFiles >= lastSync.totalFiles) "Усе синхронізовано · $moment" else "Синхронізовано · $moment"
-        SyncPhase.STOPPED -> "Перервано $moment · продовжиться автоматично"
-        SyncPhase.ERROR -> (lastSync.message ?: "Є проблеми з деякими папками") + " · $moment"
+        SyncPhase.DONE -> if (lastSync.syncedFiles >= lastSync.totalFiles) tr("Усе синхронізовано · $moment", "Всё синхронизировано · $moment") else tr("Синхронізовано · $moment", "Синхронизировано · $moment")
+        SyncPhase.STOPPED -> tr("Перервано $moment · продовжиться автоматично", "Прервано $moment · продолжится автоматически")
+        SyncPhase.ERROR -> (lastSync.message ?: tr("Є проблеми з деякими папками", "Есть проблемы с некоторыми папками")) + " · $moment"
         else -> moment
     }
 }
@@ -712,9 +747,9 @@ private fun FoldersCard(
     var busy by remember { mutableStateOf(false) }
 
     SectionCard {
-        Text("Папки", style = MaterialTheme.typography.titleMedium)
+        Text(tr("Папки", "Папки"), style = MaterialTheme.typography.titleMedium)
         if (folders.isEmpty()) {
-            Muted("Список папок з'явиться після з'єднання з комп'ютером. Папки додаються в програмі на ПК; там само можна вибрати й папку на телефоні.")
+            Muted(tr("Список папок з'явиться після з'єднання з комп'ютером. Папки додаються в програмі на ПК; там само можна вибрати й папку на телефоні.", "Список папок появится после соединения с компьютером. Папки добавляются в программе на ПК; там же можно выбрать и папку на телефоне."))
         }
         folders.forEachIndexed { index, folder ->
             if (index > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp))
@@ -732,12 +767,12 @@ private fun FoldersCard(
                 },
             )
         }
-        if (running) Muted("Змінити папку можна після завершення синхронізації.")
+        if (running) Muted(tr("Змінити папку можна після завершення синхронізації.", "Изменить папку можно после завершения синхронизации."))
         if (busy) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Muted("Переносимо папку…")
+                Muted(tr("Переносимо папку…", "Переносим папку…"))
             }
         }
     }
@@ -745,7 +780,7 @@ private fun FoldersCard(
     picking?.let { folder ->
         val mapping = mappings[folder.id] ?: FolderMapping()
         FolderPickerDialog(
-            title = if (folder.direction == Direction.TO_PHONE) "Куди зберігати «${folder.name}»" else "Яку папку надсилати в «${folder.name}»",
+            title = if (folder.direction == Direction.TO_PHONE) tr("Куди зберігати «${folder.name}»", "Куда сохранять «${folder.name}»") else tr("Яку папку надсилати в «${folder.name}»", "Какую папку отправлять в «${folder.name}»"),
             initialPath = mapping.localPath,
             onPick = { path ->
                 picking = null
@@ -779,29 +814,29 @@ private fun FoldersCard(
         }
         AlertDialog(
             onDismissRequest = { pendingChange = null },
-            title = { Text("Перенести «${folder.name}»?") },
+            title = { Text(tr("Перенести «${folder.name}»?", "Перенести «${folder.name}»?")) },
             text = {
                 Text(
                     if (movable) {
-                        "Файли буде перенесено з «${Storage.describe(volumes, oldPath)}» у «${Storage.describe(volumes, path)}» " +
-                            "без повторного завантаження."
+                        tr("Файли буде перенесено з «${Storage.describe(volumes, oldPath)}» у «${Storage.describe(volumes, path)}» ", "Файлы будут перенесены из «${Storage.describe(volumes, oldPath)}» в «${Storage.describe(volumes, path)}» ") +
+                            tr("без повторного завантаження.", "без повторной загрузки.")
                     } else {
-                        "Файли буде заново отримано з комп'ютера в «${Storage.describe(volumes, path)}». " +
-                            "Що зробити з файлами в старій папці «${Storage.describe(volumes, oldPath)}»?"
+                        tr("Файли буде заново отримано з комп'ютера в «${Storage.describe(volumes, path)}». ", "Файлы будут заново получены с компьютера в «${Storage.describe(volumes, path)}». ") +
+                            tr("Що зробити з файлами в старій папці «${Storage.describe(volumes, oldPath)}»?", "Что сделать с файлами в старой папке «${Storage.describe(volumes, oldPath)}»?")
                     },
                 )
             },
             confirmButton = {
                 if (movable) {
-                    TextButton(onClick = { apply(false) }) { Text("Перенести") }
+                    TextButton(onClick = { apply(false) }) { Text(tr("Перенести", "Перенести")) }
                 } else {
                     Row {
-                        TextButton(onClick = { apply(false) }) { Text("Залишити") }
-                        TextButton(onClick = { apply(true) }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { apply(false) }) { Text(tr("Залишити", "Оставить")) }
+                        TextButton(onClick = { apply(true) }) { Text(tr("Видалити", "Удалить"), color = MaterialTheme.colorScheme.error) }
                     }
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingChange = null }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { pendingChange = null }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
 }
@@ -823,11 +858,11 @@ private fun FolderRow(
                 Text(folder.name, style = MaterialTheme.typography.titleSmall)
                 val types = when (folder.fileTypes) {
                     FileTypes.ALL -> ""
-                    FileTypes.MUSIC -> " · лише музика"
-                    FileTypes.MOVIES -> " · лише фільми"
+                    FileTypes.MUSIC -> tr(" · лише музика", " · только музыка")
+                    FileTypes.MOVIES -> tr(" · лише фільми", " · только фильмы")
                 }
                 Text(
-                    (if (toPhone) "З комп'ютера на телефон" else "З телефона на комп'ютер") + types,
+                    (if (toPhone) tr("З комп'ютера на телефон", "С компьютера на телефон") else tr("З телефона на комп'ютер", "С телефона на компьютер")) + types,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -835,7 +870,7 @@ private fun FolderRow(
             Switch(checked = mapping.enabled, onCheckedChange = onToggle)
         }
         if (!mapping.enabled) {
-            Muted("Не синхронізується")
+            Muted(tr("Не синхронізується", "Не синхронизируется"))
             return@Column
         }
         val message = state?.message
@@ -843,35 +878,35 @@ private fun FolderRow(
             mapping.localPath == null -> null
             message != null -> message
             state == null -> null
-            state.totalFiles == 0 -> "Порожня папка"
-            state.remainingFiles == 0 -> "Усе синхронізовано · ${Format.files(state.totalFiles)}"
-            else -> "${Format.number(state.syncedFiles.toLong())} з ${Format.filesGenitive(state.totalFiles)} · " +
-                "залишилось ${Format.bytes(state.remainingBytes)}"
+            state.totalFiles == 0 -> tr("Порожня папка", "Пустая папка")
+            state.remainingFiles == 0 -> tr("Усе синхронізовано · ${Format.files(state.totalFiles)}", "Всё синхронизировано · ${Format.files(state.totalFiles)}")
+            else -> tr("${Format.number(state.syncedFiles.toLong())} з ${Format.filesGenitive(state.totalFiles)} · ", "${Format.number(state.syncedFiles.toLong())} из ${Format.filesGenitive(state.totalFiles)} · ") +
+                tr("залишилось ${Format.bytes(state.remainingBytes)}", "осталось ${Format.bytes(state.remainingBytes)}")
         }
         status?.let { Muted(it, maxLines = 2) }
         val path = mapping.localPath
         if (path == null) {
             Text(
-                if (toPhone) "Виберіть папку на телефоні" else "Виберіть папку телефона, яку надсилати на комп'ютер",
+                if (toPhone) tr("Виберіть папку на телефоні", "Выберите папку на телефоне") else tr("Виберіть папку телефона, яку надсилати на комп'ютер", "Выберите папку телефона, которую отправлять на компьютер"),
                 color = Amber,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = onPick, enabled = !locked) { Text("Вибрати папку") }
+            Button(onClick = onPick, enabled = !locked) { Text(tr("Вибрати папку", "Выбрать папку")) }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { Muted("На телефоні: ${Storage.describe(volumes, path)}", maxLines = 2) }
-                TextButton(onClick = onPick, enabled = !locked) { Text("Змінити") }
+                Box(Modifier.weight(1f)) { Muted(tr("На телефоні: ${Storage.describe(volumes, path)}", "На телефоне: ${Storage.describe(volumes, path)}"), maxLines = 2) }
+                TextButton(onClick = onPick, enabled = !locked) { Text(tr("Змінити", "Изменить")) }
             }
         }
         Muted(
             when {
-                toPhone && folder.deleteMissing -> "Файли, видалені на ПК, видаляються й з телефона"
-                toPhone -> "Файли, видалені на ПК, залишаються на телефоні"
-                else -> "З комп'ютера нічого не видаляється: файли, видалені на телефоні, залишаються на ПК"
+                toPhone && folder.deleteMissing -> tr("Файли, видалені на ПК, видаляються й з телефона", "Файлы, удалённые на ПК, удаляются и с телефона")
+                toPhone -> tr("Файли, видалені на ПК, залишаються на телефоні", "Файлы, удалённые на ПК, остаются на телефоне")
+                else -> tr("З комп'ютера нічого не видаляється: файли, видалені на телефоні, залишаються на ПК", "С компьютера ничего не удаляется: файлы, удалённые на телефоне, остаются на ПК")
             },
         )
         if (!folder.available) {
-            Text("Папка на комп'ютері недоступна", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            Text(tr("Папка на комп'ютері недоступна", "Папка на компьютере недоступна"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -886,30 +921,30 @@ private fun SettingsCard(
 ) {
     var confirm by remember { mutableStateOf(false) }
     SectionCard {
-        Text("Налаштування", style = MaterialTheme.typography.titleMedium)
+        Text(tr("Налаштування", "Настройки"), style = MaterialTheme.typography.titleMedium)
         SwitchRow(
-            title = "Автоматична синхронізація",
-            subtitle = "Кожні 15 хвилин і щоразу, коли ви відкриваєте застосунок, — якщо телефон у домашній Wi-Fi мережі, а комп'ютер увімкнено",
+            title = tr("Автоматична синхронізація", "Автоматическая синхронизация"),
+            subtitle = tr("Кожні 15 хвилин і щоразу, коли ви відкриваєте застосунок, — якщо телефон у домашній Wi-Fi мережі, а комп'ютер увімкнено", "Каждые 15 минут и каждый раз, когда вы открываете приложение, — если телефон в домашней Wi-Fi сети, а компьютер включён"),
             checked = autoSync,
             onChange = onAutoSync,
         )
         HorizontalDivider()
         TextButton(onClick = { confirm = true }) {
-            Text("Відключитися від комп'ютера", color = MaterialTheme.colorScheme.error)
+            Text(tr("Відключитися від комп'ютера", "Отключиться от компьютера"), color = MaterialTheme.colorScheme.error)
         }
     }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Відключитися від комп'ютера?") },
-            text = { Text("Синхронізація припиниться. Файли на телефоні й на комп'ютері залишаться.") },
+            title = { Text(tr("Відключитися від комп'ютера?", "Отключиться от компьютера?")) },
+            text = { Text(tr("Синхронізація припиниться. Файли на телефоні й на комп'ютері залишаться.", "Синхронизация прекратится. Файлы на телефоне и на компьютере останутся.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     onUnpair()
-                }) { Text("Відключитися", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("Відключитися", "Отключиться"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
 }

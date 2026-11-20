@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop.ui
 
+import biz.fesh.syncmusic.shared.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -286,12 +287,12 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
                 }
                 val combo = k.combo ?: return true // a modifier alone: wait for the key
                 if (combo in Hotkeys.fixed) {
-                    keysNote = "«$combo» зайнята: нею рухається курсор у списку"
+                    keysNote = tr("«$combo» зайнята: нею рухається курсор у списку", "«$combo» занята: ею двигается курсор в списке")
                     return true
                 }
                 val before = Hotkeys.owner(settings, combo)
                 controller.settings.update { it.copy(fmHotkeys = Hotkeys.assign(it, action, combo)) }
-                keysNote = if (before != null && before != action) "«$combo» тепер для «${action.title}», а не для «${before.title}»" else null
+                keysNote = if (before != null && before != action) tr("«$combo» тепер для «${action.title}», а не для «${before.title}»", "«$combo» теперь для «${action.title}», а не для «${before.title}»") else null
                 capturing = null
                 return true
             }
@@ -392,7 +393,7 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
             FmAction.MKDIR -> {
                 val dir = p.listingFor ?: return
                 if (!p.loaded || !phoneReady(p)) return
-                openDialog(FmDialog.Name(p.side, dir, null), "Нова папка")
+                openDialog(FmDialog.Name(p.side, dir, null), tr("Нова папка", "Новая папка"))
             }
             FmAction.DELETE -> {
                 val items = p.targets()
@@ -526,20 +527,20 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
         when (d) {
             is FmDialog.Transfer -> {
                 if (text.isEmpty()) {
-                    dialogError = if (d.from == Side.PC) "Вкажіть папку на телефоні" else "Вкажіть папку на комп'ютері"
+                    dialogError = if (d.from == Side.PC) tr("Вкажіть папку на телефоні", "Укажите папку на телефоне") else tr("Вкажіть папку на комп'ютері", "Укажите папку на компьютере")
                     return
                 }
                 val source = panel(d.from)
                 if (d.from == Side.PC) {
                     if (!text.startsWith("/")) {
-                        dialogError = "Шлях на телефоні починається з «/», наприклад /storage/emulated/0/Music"
+                        dialogError = tr("Шлях на телефоні починається з «/», наприклад /storage/emulated/0/Music", "Путь на телефоне начинается с «/», например /storage/emulated/0/Music")
                         return
                     }
                     fm.copyToPhone(dev.id, d.items.map { File(it.key) }, text, d.move)
                 } else {
                     val dir = File(text)
                     if (!dir.isAbsolute) {
-                        dialogError = "Вкажіть повний шлях, наприклад C:\\Users\\Музика"
+                        dialogError = tr("Вкажіть повний шлях, наприклад C:\\Users\\Музика", "Укажите полный путь, например C:\\Users\\Музыка")
                         return
                     }
                     fm.copyToPc(dev.id, d.items.map { PhoneItem(it.key, it.name, it.dir, it.size, it.modified) }, dir, d.move)
@@ -576,7 +577,7 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
 
     private fun name(d: FmDialog.Name, dev: PairedDevice, name: String) {
         if (!PhoneStorage.isValidName(name)) {
-            dialogError = "Назва не може бути порожньою, починатися чи закінчуватися крапкою й містити / \\ : * ? \" < > |"
+            dialogError = tr("Назва не може бути порожньою, починатися чи закінчуватися крапкою й містити / \\ : * ? \" < > |", "Название не может быть пустым, начинаться или заканчиваться точкой и содержать / \\ : * ? \" < > |")
             return
         }
         val p = panel(d.side)
@@ -589,16 +590,16 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
             val error = if (rename == null) {
                 val dir = File(d.dir, name)
                 when {
-                    dir.exists() -> "Така назва вже є"
-                    !dir.mkdir() -> "Не вдалося створити папку"
+                    dir.exists() -> tr("Така назва вже є", "Такое название уже есть")
+                    !dir.mkdir() -> tr("Не вдалося створити папку", "Не удалось создать папку")
                     else -> null
                 }
             } else {
                 val src = File(rename.key)
                 val dst = File(src.parentFile, name)
                 when {
-                    dst.exists() && !dst.path.equals(src.path, ignoreCase = true) -> "Така назва вже є"
-                    !src.renameTo(dst) -> "Не вдалося перейменувати (файл може бути відкритий в іншій програмі)"
+                    dst.exists() && !dst.path.equals(src.path, ignoreCase = true) -> tr("Така назва вже є", "Такое название уже есть")
+                    !src.renameTo(dst) -> tr("Не вдалося перейменувати (файл може бути відкритий в іншій програмі)", "Не удалось переименовать (файл может быть открыт в другой программе)")
                     else -> null
                 }
             }
@@ -624,7 +625,7 @@ private class FilesUi(val controller: AppController, val scope: CoroutineScope) 
                 p.reload++
                 closeDialog()
             } else {
-                dialogError = reply.error ?: if (rename == null) "Не вдалося створити папку" else "Не вдалося перейменувати"
+                dialogError = reply.error ?: if (rename == null) tr("Не вдалося створити папку", "Не удалось создать папку") else tr("Не вдалося перейменувати", "Не удалось переименовать")
             }
         }
     }
@@ -696,7 +697,7 @@ private fun FilesContent(controller: AppController, settings: Settings, keys: Fi
                 fm.phonePath.value = null
             }
             if (device == null) {
-                Muted("Спершу підключіть телефон у головному вікні Sync Music.")
+                Muted(tr("Спершу підключіть телефон у головному вікні Sync Music.", "Сначала подключите телефон в главном окне Sync Music."))
                 return@Column
             }
             if (!phoneOnline) WaitingBanner(device.name)
@@ -706,7 +707,7 @@ private fun FilesContent(controller: AppController, settings: Settings, keys: Fi
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(text, color = Palette.Amber, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    TextButton(onClick = fm::clearNotice) { Text("Зрозуміло") }
+                    TextButton(onClick = fm::clearNotice) { Text(tr("Зрозуміло", "Понятно")) }
                 }
             }
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -731,12 +732,12 @@ private fun FilesHeader(settings: Settings, device: PairedDevice?, online: Boole
         ) { ScalesLogo(30.dp, Color.White) }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text("Файли комп'ютера і телефона", style = MaterialTheme.typography.titleLarge)
+            Text(tr("Файли комп'ютера і телефона", "Файлы компьютера и телефона"), style = MaterialTheme.typography.titleLarge)
             fun k(action: FmAction) = Hotkeys.label(settings, action)
             Muted(
-                "${k(FmAction.SWITCH_PANEL)} — інша панель · ${k(FmAction.SELECT)} — позначити · ${k(FmAction.OPEN)} — відкрити · " +
-                    "${k(FmAction.UP)} — вгору · ${k(FmAction.COPY)} — копіювати · ${k(FmAction.MOVE)} — перемістити · " +
-                    "${k(FmAction.DELETE)} — видалити · ${k(FmAction.HOTKEYS)} — клавіші",
+                tr("${k(FmAction.SWITCH_PANEL)} — інша панель · ${k(FmAction.SELECT)} — позначити · ${k(FmAction.OPEN)} — відкрити · ", "${k(FmAction.SWITCH_PANEL)} — другая панель · ${k(FmAction.SELECT)} — выделить · ${k(FmAction.OPEN)} — открыть · ") +
+                    tr("${k(FmAction.UP)} — вгору · ${k(FmAction.COPY)} — копіювати · ${k(FmAction.MOVE)} — перемістити · ", "${k(FmAction.UP)} — вверх · ${k(FmAction.COPY)} — копировать · ${k(FmAction.MOVE)} — переместить · ") +
+                    tr("${k(FmAction.DELETE)} — видалити · ${k(FmAction.HOTKEYS)} — клавіші", "${k(FmAction.DELETE)} — удалить · ${k(FmAction.HOTKEYS)} — клавиши"),
                 maxLines = 2,
             )
         }
@@ -747,9 +748,9 @@ private fun FilesHeader(settings: Settings, device: PairedDevice?, online: Boole
         }
         if (device != null) {
             if (online) {
-                StatusPill("${device.name} на зв'язку", Palette.Green, Palette.GreenSoft)
+                StatusPill(tr("${device.name} на зв'язку", "${device.name} на связи"), Palette.Green, Palette.GreenSoft)
             } else {
-                StatusPill("Чекаємо на телефон", Palette.Amber, Palette.AmberSoft)
+                StatusPill(tr("Чекаємо на телефон", "Ждём телефон"), Palette.Amber, Palette.AmberSoft)
             }
         }
     }
@@ -765,10 +766,10 @@ private fun WaitingBanner(name: String) {
         CircularProgressIndicator(Modifier.size(20.dp), color = look.toPc, strokeWidth = 2.dp)
         Spacer(Modifier.width(14.dp))
         Column {
-            Text("Відкрийте Sync Music на телефоні «$name»", style = MaterialTheme.typography.titleSmall)
+            Text(tr("Відкрийте Sync Music на телефоні «$name»", "Откройте Sync Music на телефоне «$name»"), style = MaterialTheme.typography.titleSmall)
             Muted(
-                "Телефон підключиться за кілька секунд і показуватиме свої файли, поки відкрите це вікно. " +
-                    "Телефон і комп'ютер мають бути в одній Wi-Fi мережі.",
+                tr("Телефон підключиться за кілька секунд і показуватиме свої файли, поки відкрите це вікно. ", "Телефон подключится через несколько секунд и будет показывать свои файлы, пока открыто это окно. ") +
+                    tr("Телефон і комп'ютер мають бути в одній Wi-Fi мережі.", "Телефон и компьютер должны быть в одной Wi-Fi сети."),
             )
         }
     }
@@ -796,10 +797,10 @@ private fun PcPanel(modifier: Modifier, ui: FilesUi) {
         modifier = modifier,
         ui = ui,
         p = p,
-        title = "Комп'ютер",
-        location = path ?: "Швидкий доступ і диски",
+        title = tr("Комп'ютер", "Компьютер"),
+        location = path ?: tr("Швидкий доступ і диски", "Быстрый доступ и диски"),
         accent = LocalLook.current.toPhoneBrush,
-        startLabel = "Диски",
+        startLabel = tr("Диски", "Диски"),
         empty = null,
     )
 }
@@ -823,24 +824,24 @@ private fun listPc(path: String?, settings: Settings): Listing {
     if (path == null) {
         val rows = ArrayList<FileRow>()
         for (folder in settings.folders) {
-            if (File(folder.path).isDirectory) rows += FileRow(folder.path, folder.name, true, note = "синхронізується · ${folder.path}")
+            if (File(folder.path).isDirectory) rows += FileRow(folder.path, folder.name, true, note = tr("синхронізується · ${folder.path}", "синхронизируется · ${folder.path}"))
         }
         val home = System.getProperty("user.home")
         if (home != null) {
-            rows += FileRow(home, "Домашня папка", true, note = home)
-            for ((name, label) in listOf("Music" to "Музика", "Videos" to "Відео", "Downloads" to "Завантаження", "Desktop" to "Робочий стіл", "Documents" to "Документи")) {
+            rows += FileRow(home, tr("Домашня папка", "Домашняя папка"), true, note = home)
+            for ((name, label) in listOf("Music" to tr("Музика", "Музыка"), "Videos" to tr("Відео", "Видео"), "Downloads" to tr("Завантаження", "Загрузки"), "Desktop" to tr("Робочий стіл", "Рабочий стол"), "Documents" to tr("Документи", "Документы"))) {
                 val dir = File(home, name)
                 if (dir.isDirectory) rows += FileRow(dir.path, label, true, note = dir.path)
             }
         }
         for (root in File.listRoots().orEmpty()) {
             val total = root.totalSpace
-            val note = if (total > 0) "вільно ${Format.bytes(root.usableSpace)} з ${Format.bytes(total)}" else null
-            rows += FileRow(root.path, "Диск ${root.path.trimEnd('\\', '/')}".takeIf { root.path != "/" } ?: "Корінь /", true, note = note)
+            val note = if (total > 0) tr("вільно ${Format.bytes(root.usableSpace)} з ${Format.bytes(total)}", "свободно ${Format.bytes(root.usableSpace)} из ${Format.bytes(total)}") else null
+            rows += FileRow(root.path, tr("Диск ${root.path.trimEnd('\\', '/')}", "Диск ${root.path.trimEnd('\\', '/')}").takeIf { root.path != "/" } ?: tr("Корінь /", "Корень /"), true, note = note)
         }
         return Listing(rows.distinctBy { it.key })
     }
-    val files = File(path).listFiles() ?: return Listing(emptyList(), "Немає доступу до папки")
+    val files = File(path).listFiles() ?: return Listing(emptyList(), tr("Немає доступу до папки", "Нет доступа к папке"))
     val rows = files
         .filter { !it.name.startsWith(".") && !it.isHidden }
         .map { FileRow(it.path, it.name, it.isDirectory, if (it.isFile) it.length() else 0, it.lastModified()) }
@@ -881,7 +882,7 @@ private fun PhonePanel(modifier: Modifier, ui: FilesUi, device: PairedDevice, ph
                 p.volumes = reply.volumes
                 Listing(
                     reply.volumes.map { v ->
-                        val free = if (v.freeBytes >= 0) "вільно ${Format.bytes(v.freeBytes)}" + (if (v.totalBytes > 0) " з ${Format.bytes(v.totalBytes)}" else "") else null
+                        val free = if (v.freeBytes >= 0) tr("вільно ${Format.bytes(v.freeBytes)}", "свободно ${Format.bytes(v.freeBytes)}") + (if (v.totalBytes > 0) tr(" з ${Format.bytes(v.totalBytes)}", " из ${Format.bytes(v.totalBytes)}") else "") else null
                         FileRow(v.root, v.label, true, note = free)
                     },
                 )
@@ -896,15 +897,15 @@ private fun PhonePanel(modifier: Modifier, ui: FilesUi, device: PairedDevice, ph
         modifier = modifier,
         ui = ui,
         p = p,
-        title = "Телефон",
+        title = tr("Телефон", "Телефон"),
         location = when {
-            path == null -> "Пам'ять телефона і SD-карта"
+            path == null -> tr("Пам'ять телефона і SD-карта", "Память телефона и SD-карта")
             volume != null -> volume.label + path!!.removePrefix(volume.root).trim('/').let { if (it.isEmpty()) "" else " › " + it.replace("/", " › ") }
             else -> path!!
         },
         accent = LocalLook.current.toPcBrush,
-        startLabel = "Носії",
-        empty = if (!phoneOnline) "Файли з'являться, щойно телефон підключиться" else null,
+        startLabel = tr("Носії", "Носители"),
+        empty = if (!phoneOnline) tr("Файли з'являться, щойно телефон підключиться", "Файлы появятся, как только телефон подключится") else null,
     )
 }
 
@@ -938,7 +939,7 @@ private fun Panel(
                 ui.active = p.side
                 ui.perform(if (p.side == Side.PC) FmAction.LEFT_DRIVES else FmAction.RIGHT_DRIVES)
             }) { Text(startLabel) }
-            TextButton(onClick = { p.reload++ }) { Text("Оновити") }
+            TextButton(onClick = { p.reload++ }) { Text(tr("Оновити", "Обновить")) }
         }
         // The path line, as in Total Commander: highlighted in the active panel.
         Text(
@@ -969,7 +970,7 @@ private fun Panel(
                     }
                 }
                 if (listing != null && listing.error == null && listing.rows.isEmpty() && p.listingFor != null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Muted("Порожня папка") }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Muted(tr("Порожня папка", "Пустая папка")) }
                 }
             }
             p.search?.let { text ->
@@ -977,7 +978,7 @@ private fun Panel(
                     Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(8.dp))
                         .background(scheme.inverseSurface).padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text("Пошук: ", color = scheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
+                    Text(tr("Пошук: ", "Поиск: "), color = scheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
                     Text(text, color = scheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -995,14 +996,14 @@ private fun Panel(
 }
 
 private fun statusLine(p: PanelState): String {
-    if (!p.inFolder) return if (p.side == Side.PC) "Двічі клацніть диск або папку (чи Enter), щоб відкрити" else "Виберіть пам'ять телефона або SD-карту"
+    if (!p.inFolder) return if (p.side == Side.PC) tr("Двічі клацніть диск або папку (чи Enter), щоб відкрити", "Дважды щёлкните диск или папку (или Enter), чтобы открыть") else tr("Виберіть пам'ять телефона або SD-карту", "Выберите память телефона или SD-карту")
     val rows = p.rows.filter { !it.up }
     val files = rows.filter { !it.dir }
     val dirs = rows.filter { it.dir }
     val selFiles = files.filter { it.key in p.selected }
     val selDirs = dirs.count { it.key in p.selected }
-    return "Позначено ${Format.bytes(selFiles.sumOf { it.size })} з ${Format.bytes(files.sumOf { it.size })} · " +
-        "файлів ${selFiles.size} з ${files.size} · папок $selDirs з ${dirs.size}"
+    return tr("Позначено ${Format.bytes(selFiles.sumOf { it.size })} з ${Format.bytes(files.sumOf { it.size })} · ", "Выделено ${Format.bytes(selFiles.sumOf { it.size })} из ${Format.bytes(files.sumOf { it.size })} · ") +
+        tr("файлів ${selFiles.size} з ${files.size} · папок $selDirs з ${dirs.size}", "файлов ${selFiles.size} из ${files.size} · папок $selDirs из ${dirs.size}")
 }
 
 private val ExtWidth = 64.dp
@@ -1013,10 +1014,10 @@ private val DateWidth = 118.dp
 private fun ColumnHeaders(ui: FilesUi, p: PanelState) {
     if (p.listingFor == null) return
     Row(Modifier.fillMaxWidth().padding(start = 34.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        SortHeader(ui, p, "Ім'я", SortBy.NAME, Modifier.weight(1f))
-        SortHeader(ui, p, "Тип", SortBy.EXT, Modifier.width(ExtWidth))
-        SortHeader(ui, p, "Розмір", SortBy.SIZE, Modifier.width(SizeWidth).padding(end = 10.dp), TextAlign.End)
-        SortHeader(ui, p, "Дата", SortBy.TIME, Modifier.width(DateWidth))
+        SortHeader(ui, p, tr("Ім'я", "Имя"), SortBy.NAME, Modifier.weight(1f))
+        SortHeader(ui, p, tr("Тип", "Тип"), SortBy.EXT, Modifier.width(ExtWidth))
+        SortHeader(ui, p, tr("Розмір", "Размер"), SortBy.SIZE, Modifier.width(SizeWidth).padding(end = 10.dp), TextAlign.End)
+        SortHeader(ui, p, tr("Дата", "Дата"), SortBy.TIME, Modifier.width(DateWidth))
     }
 }
 
@@ -1112,7 +1113,7 @@ private fun FileList(ui: FilesUi, p: PanelState, isActive: Boolean) {
                     )
                     Text(row.ext, color = muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(ExtWidth))
                     Text(
-                        if (row.dir) "<Папка>" else Format.bytes(row.size),
+                        if (row.dir) tr("<Папка>", "<Папка>") else Format.bytes(row.size),
                         color = muted,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.End,
@@ -1175,13 +1176,13 @@ private fun FileGlyph(row: FileRow, tint: Color?) {
 private fun FunctionBar(ui: FilesUi, settings: Settings) {
     val scheme = MaterialTheme.colorScheme
     val buttons = listOf(
-        FmAction.VIEW to "Перегляд",
-        FmAction.EDIT to "Правка",
-        FmAction.COPY to "Копіювати",
-        FmAction.MOVE to "Перемістити",
-        FmAction.MKDIR to "Нова папка",
-        FmAction.DELETE to "Видалити",
-        FmAction.HOTKEYS to "Клавіші",
+        FmAction.VIEW to tr("Перегляд", "Просмотр"),
+        FmAction.EDIT to tr("Правка", "Правка"),
+        FmAction.COPY to tr("Копіювати", "Копировать"),
+        FmAction.MOVE to tr("Перемістити", "Переместить"),
+        FmAction.MKDIR to tr("Нова папка", "Новая папка"),
+        FmAction.DELETE to tr("Видалити", "Удалить"),
+        FmAction.HOTKEYS to tr("Клавіші", "Клавиши"),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for ((action, text) in buttons) {
@@ -1207,10 +1208,10 @@ private fun FunctionBar(ui: FilesUi, settings: Settings) {
 // ---------------------------------------------------------------- dialogs
 
 /** Ukrainian "1 об'єкт", "3 об'єкти", "12 об'єктів". */
-private fun countItems(n: Int) = "${Format.number(n.toLong())} ${Format.plural(n.toLong(), "об'єкт", "об'єкти", "об'єктів")}"
+private fun countItems(n: Int) = tr("${Format.number(n.toLong())} ${Format.plural(n.toLong(), "об'єкт", "об'єкти", "об'єктів")}", "${Format.number(n.toLong())} ${Format.plural(n.toLong(), "объект", "объекта", "объектов")}")
 
 private fun describe(items: List<FileRow>): String =
-    if (items.size == 1) "«${items[0].name}»" else countItems(items.size) + " (файли й папки з усім вмістом)"
+    if (items.size == 1) "«${items[0].name}»" else countItems(items.size) + tr(" (файли й папки з усім вмістом)", " (файлы и папки со всем содержимым)")
 
 @Composable
 private fun DialogOverlay(ui: FilesUi, d: FmDialog, settings: Settings) {
@@ -1264,7 +1265,7 @@ private fun DialogButtons(ui: FilesUi, confirm: String, danger: Boolean = false)
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (ui.dialogBusy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = ui::closeDialog) { Text("Скасувати (Esc)") }
+        TextButton(onClick = ui::closeDialog) { Text(tr("Скасувати (Esc)", "Отмена (Esc)")) }
         Spacer(Modifier.width(8.dp))
         Button(
             onClick = ui::confirm,
@@ -1276,62 +1277,62 @@ private fun DialogButtons(ui: FilesUi, confirm: String, danger: Boolean = false)
 
 @Composable
 private fun ColumnScope.TransferDialog(ui: FilesUi, d: FmDialog.Transfer) {
-    val verb = if (d.move) "Переміщення" else "Копіювання"
-    val where = if (d.from == Side.PC) "на телефон" else "на комп'ютер"
+    val verb = if (d.move) tr("Переміщення", "Перемещение") else tr("Копіювання", "Копирование")
+    val where = if (d.from == Side.PC) tr("на телефон", "на телефон") else tr("на комп'ютер", "на компьютер")
     Text("$verb $where", style = MaterialTheme.typography.titleLarge)
     Text(
-        (if (d.move) "Перемістити " else "Копіювати ") + describe(d.items) + " у папку:",
+        (if (d.move) tr("Перемістити ", "Переместить ") else tr("Копіювати ", "Копировать ")) + describe(d.items) + tr(" у папку:", " в папку:"),
         style = MaterialTheme.typography.bodyMedium,
     )
-    DialogField(ui, if (d.from == Side.PC) "Папка на телефоні" else "Папка на комп'ютері")
+    DialogField(ui, if (d.from == Side.PC) tr("Папка на телефоні", "Папка на телефоне") else tr("Папка на комп'ютері", "Папка на компьютере"))
     Muted(
         buildString {
-            append("Файли з такими самими назвами не перезаписуються: однакові пропускаються, інші зберігаються поруч як копія.")
+            append(tr("Файли з такими самими назвами не перезаписуються: однакові пропускаються, інші зберігаються поруч як копія.", "Файлы с такими же названиями не перезаписываются: одинаковые пропускаются, остальные сохраняются рядом как копия."))
             if (d.move) {
-                append(if (d.from == Side.PC) " Після копіювання файли комп'ютера перейдуть у кошик Windows." else " Після копіювання файли буде видалено з телефона.")
+                append(if (d.from == Side.PC) tr(" Після копіювання файли комп'ютера перейдуть у кошик Windows.", " После копирования файлы компьютера попадут в корзину Windows.") else tr(" Після копіювання файли буде видалено з телефона.", " После копирования файлы будут удалены с телефона."))
             }
         },
     )
-    DialogButtons(ui, if (d.move) "Перемістити" else "Копіювати")
+    DialogButtons(ui, if (d.move) tr("Перемістити", "Переместить") else tr("Копіювати", "Копировать"))
 }
 
 @Composable
 private fun ColumnScope.DeleteDialog(ui: FilesUi, d: FmDialog.Delete) {
-    Text("Видалення", style = MaterialTheme.typography.titleLarge)
-    Text("Видалити ${describe(d.items)}?", style = MaterialTheme.typography.bodyLarge)
+    Text(tr("Видалення", "Удаление"), style = MaterialTheme.typography.titleLarge)
+    Text(tr("Видалити ${describe(d.items)}?", "Удалить ${describe(d.items)}?"), style = MaterialTheme.typography.bodyLarge)
     if (d.side == Side.PC) {
-        Muted(if (PcFiles.canRecycle) "Вони потраплять у кошик Windows — їх можна буде відновити." else "Кошик Windows недоступний — нічого не буде видалено.")
+        Muted(if (PcFiles.canRecycle) tr("Вони потраплять у кошик Windows — їх можна буде відновити.", "Они попадут в корзину Windows — их можно будет восстановить.") else tr("Кошик Windows недоступний — нічого не буде видалено.", "Корзина Windows недоступна — ничего не будет удалено."))
     } else {
-        Text("На телефоні немає кошика: файли буде видалено назавжди.", color = Palette.Red, style = MaterialTheme.typography.bodyMedium)
+        Text(tr("На телефоні немає кошика: файли буде видалено назавжди.", "На телефоне нет корзины: файлы будут удалены навсегда."), color = Palette.Red, style = MaterialTheme.typography.bodyMedium)
     }
-    DialogButtons(ui, "Видалити", danger = d.side == Side.PHONE)
+    DialogButtons(ui, tr("Видалити", "Удалить"), danger = d.side == Side.PHONE)
 }
 
 @Composable
 private fun ColumnScope.NameDialog(ui: FilesUi, d: FmDialog.Name) {
-    val where = if (d.side == Side.PC) "на комп'ютері" else "на телефоні"
-    Text(if (d.rename == null) "Нова папка $where" else "Перейменування $where", style = MaterialTheme.typography.titleLarge)
-    DialogField(ui, if (d.rename == null) "Назва папки" else "Нова назва")
-    DialogButtons(ui, if (d.rename == null) "Створити" else "Перейменувати")
+    val where = if (d.side == Side.PC) tr("на комп'ютері", "на компьютере") else tr("на телефоні", "на телефоне")
+    Text(if (d.rename == null) tr("Нова папка $where", "Новая папка $where") else tr("Перейменування $where", "Переименование $where"), style = MaterialTheme.typography.titleLarge)
+    DialogField(ui, if (d.rename == null) tr("Назва папки", "Название папки") else tr("Нова назва", "Новое название"))
+    DialogButtons(ui, if (d.rename == null) tr("Створити", "Создать") else tr("Перейменувати", "Переименовать"))
 }
 
 @Composable
 private fun ColumnScope.MaskDialog(ui: FilesUi, d: FmDialog.Mask) {
-    Text(if (d.select) "Позначити файли" else "Зняти позначки", style = MaterialTheme.typography.titleLarge)
-    DialogField(ui, "Маска, наприклад *.mp3;*.flac")
-    Muted("* — будь-які символи, ? — один символ. Кілька масок — через «;».")
-    DialogButtons(ui, if (d.select) "Позначити" else "Зняти")
+    Text(if (d.select) tr("Позначити файли", "Выделить файлы") else tr("Зняти позначки", "Снять выделение"), style = MaterialTheme.typography.titleLarge)
+    DialogField(ui, tr("Маска, наприклад *.mp3;*.flac", "Маска, например *.mp3;*.flac"))
+    Muted(tr("* — будь-які символи, ? — один символ. Кілька масок — через «;».", "* — любые символы, ? — один символ. Несколько масок — через «;»."))
+    DialogButtons(ui, if (d.select) tr("Позначити", "Выделить") else tr("Зняти", "Снять"))
 }
 
 @Composable
 private fun ColumnScope.KeysDialog(ui: FilesUi, settings: Settings) {
     val scheme = MaterialTheme.colorScheme
-    Text("Клавіші файлового вікна", style = MaterialTheme.typography.titleLarge)
-    Muted("Типово — як у Total Commander. Натисніть «+», а потім потрібне сполучення; × прибирає клавішу. Стрілки, PageUp/PageDown, Home/End і Esc працюють завжди.")
+    Text(tr("Клавіші файлового вікна", "Клавиши файлового окна"), style = MaterialTheme.typography.titleLarge)
+    Muted(tr("Типово — як у Total Commander. Натисніть «+», а потім потрібне сполучення; × прибирає клавішу. Стрілки, PageUp/PageDown, Home/End і Esc працюють завжди.", "По умолчанию — как в Total Commander. Нажмите «+», а затем нужное сочетание; × убирает клавишу. Стрелки, PageUp/PageDown, Home/End и Esc работают всегда."))
     val capturing = ui.capturing
     if (capturing != null) {
         Text(
-            "Натисніть сполучення для «${capturing.title}»… (Esc — скасувати)",
+            tr("Натисніть сполучення для «${capturing.title}»… (Esc — скасувати)", "Нажмите сочетание для «${capturing.title}»… (Esc — отмена)"),
             color = scheme.onPrimary,
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(scheme.primary).padding(12.dp),
@@ -1381,11 +1382,11 @@ private fun ColumnScope.KeysDialog(ui: FilesUi, settings: Settings) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = {
             ui.controller.settings.update { it.copy(fmHotkeys = emptyMap()) }
-            ui.keysNote = "Повернуто типові клавіші Total Commander"
+            ui.keysNote = tr("Повернуто типові клавіші Total Commander", "Возвращены стандартные клавиши Total Commander")
             ui.capturing = null
-        }) { Text("Типові клавіші") }
+        }) { Text(tr("Типові клавіші", "Стандартные клавиши")) }
         Spacer(Modifier.weight(1f))
-        Button(onClick = ui::closeDialog) { Text("Готово") }
+        Button(onClick = ui::closeDialog) { Text(tr("Готово", "Готово")) }
     }
 }
 
@@ -1418,46 +1419,46 @@ private fun CopyQueue(controller: AppController, jobs: List<CopyJob>) {
             Column(Modifier.weight(1f)) {
                 Text(
                     when {
-                        active -> (if (moving) "Переміщення" else "Копіювання") + ": ${Format.number(finished.toLong())} з ${Format.filesGenitive(counted.size)}"
-                        failed.isNotEmpty() -> "Скопійовано ${Format.files(copied)}, не вдалося ${Format.files(failed.size)}"
-                        else -> "Готово: скопійовано ${Format.files(copied)}"
+                        active -> (if (moving) tr("Переміщення", "Перемещение") else tr("Копіювання", "Копирование")) + tr(": ${Format.number(finished.toLong())} з ${Format.filesGenitive(counted.size)}", ": ${Format.number(finished.toLong())} из ${Format.filesGenitive(counted.size)}")
+                        failed.isNotEmpty() -> tr("Скопійовано ${Format.files(copied)}, не вдалося ${Format.files(failed.size)}", "Скопировано ${Format.files(copied)}, не удалось ${Format.files(failed.size)}")
+                        else -> tr("Готово: скопійовано ${Format.files(copied)}", "Готово: скопировано ${Format.files(copied)}")
                     },
                     style = MaterialTheme.typography.titleSmall,
                 )
                 val details = buildList {
-                    add("${Format.bytes(doneBytes)} з ${Format.bytes(totalBytes)}")
+                    add(tr("${Format.bytes(doneBytes)} з ${Format.bytes(totalBytes)}", "${Format.bytes(doneBytes)} из ${Format.bytes(totalBytes)}"))
                     if (active && speed > 0) {
                         add(Format.speed(speed))
                         Format.eta(totalBytes - doneBytes, speed)?.let { add(it) }
                     }
-                    if (skipped > 0) add("вже були: ${Format.files(skipped)}")
+                    if (skipped > 0) add(tr("вже були: ${Format.files(skipped)}", "уже были: ${Format.files(skipped)}"))
                 }
                 Muted(details.joinToString(" · "), maxLines = 1)
             }
             if (active) {
-                OutlinedButton(onClick = fm::cancelAll) { Text("Скасувати") }
+                OutlinedButton(onClick = fm::cancelAll) { Text(tr("Скасувати", "Отмена")) }
             } else {
                 if (failed.isNotEmpty()) {
-                    OutlinedButton(onClick = fm::retryFailed) { Text("Повторити невдалі") }
+                    OutlinedButton(onClick = fm::retryFailed) { Text(tr("Повторити невдалі", "Повторить неудачные")) }
                     Spacer(Modifier.width(8.dp))
                 }
-                TextButton(onClick = fm::clearFinished) { Text("Сховати") }
+                TextButton(onClick = fm::clearFinished) { Text(tr("Сховати", "Скрыть")) }
             }
         }
         GradientBar(fraction, if (!active && failed.isEmpty()) look.done else look.progress, 8.dp)
         running?.let { job ->
-            val where = if (job.toPhone) "на телефон" else "на комп'ютер"
-            Muted("Зараз $where: ${job.name}", maxLines = 1)
+            val where = if (job.toPhone) tr("на телефон", "на телефон") else tr("на комп'ютер", "на компьютер")
+            Muted(tr("Зараз $where: ${job.name}", "Сейчас $where: ${job.name}"), maxLines = 1)
         }
         failed.take(3).forEach { job ->
             Text(
-                "${job.name}: ${job.error ?: "помилка"}",
+                tr("${job.name}: ${job.error ?: "помилка"}", "${job.name}: ${job.error ?: "ошибка"}"),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (failed.size > 3) Muted("і ще ${Format.files(failed.size - 3)} з помилками")
+        if (failed.size > 3) Muted(tr("і ще ${Format.files(failed.size - 3)} з помилками", "и ещё ${Format.files(failed.size - 3)} с ошибками"))
     }
 }

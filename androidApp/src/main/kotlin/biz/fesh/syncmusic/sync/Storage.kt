@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.sync
 
+import biz.fesh.syncmusic.shared.tr
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -52,7 +53,7 @@ object Storage {
     fun volumes(context: Context): List<Volume> {
         val result = mutableListOf<Volume>()
         val primary = primaryRoot()
-        result += Volume(PRIMARY, "Пам'ять телефона", primary, false, false, free(primary), total(primary))
+        result += Volume(PRIMARY, tr("Пам'ять телефона", "Память телефона"), primary, false, false, free(primary), total(primary))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val sm = context.getSystemService(StorageManager::class.java)
@@ -61,7 +62,7 @@ object Storage {
                     val dir = volume.directory ?: continue
                     val uuid = volume.uuid ?: continue
                     val description = try { volume.getDescription(context) } catch (_: Throwable) { null }
-                    val kind = if (volume.isRemovable) "SD-карта" else "Додаткова пам'ять"
+                    val kind = if (volume.isRemovable) tr("SD-карта", "SD-карта") else tr("Додаткова пам'ять", "Дополнительная память")
                     val label = if (description.isNullOrBlank() || description.equals(kind, ignoreCase = true)) kind else "$kind ($description)"
                     result += Volume(uuid, label, dir, volume.isRemovable, false, free(dir), total(dir))
                 }
@@ -75,7 +76,7 @@ object Storage {
                 val mounted = try { Environment.getExternalStorageState(dir) == Environment.MEDIA_MOUNTED } catch (_: Throwable) { false }
                 if (!mounted) continue
                 val id = dir.absolutePath.removePrefix("/storage/").substringBefore('/')
-                result += Volume(id, "SD-карта (папка застосунку)", dir, true, true, free(dir), total(dir))
+                result += Volume(id, tr("SD-карта (папка застосунку)", "SD-карта (папка приложения)"), dir, true, true, free(dir), total(dir))
             }
         }
         return result

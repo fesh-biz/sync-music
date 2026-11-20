@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic
 
+import biz.fesh.syncmusic.shared.tr
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -28,14 +29,14 @@ object Notifications {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_PROGRESS, "Перебіг синхронізації", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Показується, поки файли передаються між телефоном і комп'ютером"
+            NotificationChannel(CHANNEL_PROGRESS, tr("Перебіг синхронізації", "Ход синхронизации"), NotificationManager.IMPORTANCE_LOW).apply {
+                description = tr("Показується, поки файли передаються між телефоном і комп'ютером", "Показывается, пока файлы передаются между телефоном и компьютером")
                 setShowBadge(false)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_DONE, "Синхронізацію завершено", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Скільки файлів отримано, надіслано або видалено"
+            NotificationChannel(CHANNEL_DONE, tr("Синхронізацію завершено", "Синхронизация завершена"), NotificationManager.IMPORTANCE_LOW).apply {
+                description = tr("Скільки файлів отримано, надіслано або видалено", "Сколько файлов получено, отправлено или удалено")
             },
         )
     }
@@ -51,21 +52,21 @@ object Notifications {
     fun buildProgress(context: Context, progress: SyncProgress?): Notification {
         val builder = NotificationCompat.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(R.drawable.ic_stat_sync)
-            .setContentTitle("Синхронізація файлів")
+            .setContentTitle(tr("Синхронізація файлів", "Синхронизация файлов"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openApp(context))
-            .addAction(R.drawable.ic_stat_sync, "Пауза", SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_PAUSE))
+            .addAction(R.drawable.ic_stat_sync, tr("Пауза", "Пауза"), SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_PAUSE))
         if (progress == null || progress.totalFiles == 0) {
-            builder.setContentText("Підключення до комп'ютера…").setProgress(0, 0, true)
+            builder.setContentText(tr("Підключення до комп'ютера…", "Подключение к компьютеру…")).setProgress(0, 0, true)
         } else {
             val text = when (progress.phase) {
-                SyncPhase.DELETING -> "Видалення файлів, видалених у джерелі"
-                SyncPhase.UPLOADING -> "Надсилання на комп'ютер · ${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)}"
-                else -> "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · " +
-                    "залишилось ${Format.bytes(progress.remainingBytes)}"
+                SyncPhase.DELETING -> tr("Видалення файлів, видалених у джерелі", "Удаление файлов, удалённых в источнике")
+                SyncPhase.UPLOADING -> tr("Надсилання на комп'ютер · ${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)}", "Отправка на компьютер · ${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)}")
+                else -> tr("${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · ", "${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)} · ") +
+                    tr("залишилось ${Format.bytes(progress.remainingBytes)}", "осталось ${Format.bytes(progress.remainingBytes)}")
             }
             builder.setContentText(text)
                 .setProgress(1000, (progress.fraction * 1000).toInt(), false)
@@ -106,18 +107,18 @@ object Notifications {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return
         val text = if (progress.totalFiles > 0) {
-            "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · " +
-                "залишилось ${Format.bytes(progress.remainingBytes)}"
+            tr("${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)} · ", "${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)} · ") +
+                tr("залишилось ${Format.bytes(progress.remainingBytes)}", "осталось ${Format.bytes(progress.remainingBytes)}")
         } else {
-            "Не синхронізується, доки ви не продовжите"
+            tr("Не синхронізується, доки ви не продовжите", "Не синхронизируется, пока вы не продолжите")
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_DONE)
             .setSmallIcon(R.drawable.ic_stat_sync)
-            .setContentTitle("Синхронізацію призупинено")
+            .setContentTitle(tr("Синхронізацію призупинено", "Синхронизация приостановлена"))
             .setContentText(text)
             .setSilent(true)
             .setContentIntent(openApp(context))
-            .addAction(R.drawable.ic_stat_sync, "Продовжити", SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_RESUME))
+            .addAction(R.drawable.ic_stat_sync, tr("Продовжити", "Продолжить"), SyncActionReceiver.intent(context, SyncActionReceiver.ACTION_RESUME))
             .build()
         try {
             nm.notify(ID_PAUSED, notification)
@@ -137,10 +138,10 @@ object Notifications {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return
         val parts = mutableListOf<String>()
-        if (progress.downloadedThisRun > 0) parts += "отримано ${Format.files(progress.downloadedThisRun)}"
-        if (progress.uploadedThisRun > 0) parts += "надіслано на ПК ${Format.files(progress.uploadedThisRun)}"
-        if (progress.deletedThisRun > 0) parts += "видалено ${Format.files(progress.deletedThisRun)}"
-        val title = if (progress.phase == SyncPhase.DONE) "Файли синхронізовано" else "Синхронізацію зупинено"
+        if (progress.downloadedThisRun > 0) parts += tr("отримано ${Format.files(progress.downloadedThisRun)}", "получено ${Format.files(progress.downloadedThisRun)}")
+        if (progress.uploadedThisRun > 0) parts += tr("надіслано на ПК ${Format.files(progress.uploadedThisRun)}", "отправлено на ПК ${Format.files(progress.uploadedThisRun)}")
+        if (progress.deletedThisRun > 0) parts += tr("видалено ${Format.files(progress.deletedThisRun)}", "удалено ${Format.files(progress.deletedThisRun)}")
+        val title = if (progress.phase == SyncPhase.DONE) tr("Файли синхронізовано", "Файлы синхронизированы") else tr("Синхронізацію зупинено", "Синхронизация остановлена")
         val text = parts.joinToString(", ").replaceFirstChar { it.uppercase() }
         val notification = NotificationCompat.Builder(context, CHANNEL_DONE)
             .setSmallIcon(R.drawable.ic_stat_sync)

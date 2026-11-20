@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.tr
 import biz.fesh.syncmusic.shared.Protocol
 import kotlinx.coroutines.sync.Mutex
 import java.io.File
@@ -73,7 +74,7 @@ object Transfers {
     }
 
     fun receive(root: File, relative: String, size: Long, modified: Long, offset: Long, input: InputStream): UploadOutcome {
-        val target = resolve(root, relative) ?: return UploadOutcome.Rejected("Недопустима назва файлу для Windows: $relative")
+        val target = resolve(root, relative) ?: return UploadOutcome.Rejected(tr("Недопустима назва файлу для Windows: $relative", "Недопустимое для Windows имя файла: $relative"))
         val part = partFile(root, relative)
         val have = if (part.isFile) part.length() else 0L
         if (have != offset) return UploadOutcome.Conflict(have)
@@ -97,7 +98,7 @@ object Transfers {
             }
             length > size -> {
                 part.delete()
-                UploadOutcome.Rejected("Отримано більше даних, ніж очікувалося")
+                UploadOutcome.Rejected(tr("Отримано більше даних, ніж очікувалося", "Получено больше данных, чем ожидалось"))
             }
             else -> UploadOutcome.Partial(length)
         }
@@ -113,7 +114,7 @@ object Transfers {
         if (sameContent(target, received)) return null
         var n = 1
         while (true) {
-            val candidate = File(target.parentFile, biz.fesh.syncmusic.shared.FileNames.copyName(target.name, "з телефона", n))
+            val candidate = File(target.parentFile, biz.fesh.syncmusic.shared.FileNames.copyName(target.name, tr("з телефона", "с телефона"), n))
             if (!candidate.exists()) return candidate
             if (sameContent(candidate, received)) return null
             n++

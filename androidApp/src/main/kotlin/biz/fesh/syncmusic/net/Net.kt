@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.net
 
+import biz.fesh.syncmusic.shared.tr
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -37,14 +38,14 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
-class UnauthorizedException : IOException("Комп'ютер не впізнає цей телефон")
+class UnauthorizedException : IOException(tr("Комп'ютер не впізнає цей телефон", "Компьютер не узнаёт этот телефон"))
 class PairingException(message: String) : IOException(message)
-class FileGoneException(path: String) : IOException("Файл зник на комп'ютері: $path")
+class FileGoneException(path: String) : IOException(tr("Файл зник на комп'ютері: $path", "Файл исчез на компьютере: $path"))
 class StoppedException : IOException("stopped")
 open class FolderUnavailableException(message: String) : IOException(message)
 
 /** The folder was removed from the list on the PC: stop syncing it right away. */
-class FolderRemovedException : FolderUnavailableException("Папку прибрано на комп'ютері")
+class FolderRemovedException : FolderUnavailableException(tr("Папку прибрано на комп'ютері", "Папка убрана на компьютере"))
 
 sealed interface UploadResult {
     data object Complete : UploadResult
@@ -226,7 +227,7 @@ class Api(
                     while (remaining > 0) {
                         if (isStopped()) throw StoppedException()
                         val n = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                        if (n < 0) throw IOException("файл змінився під час надсилання")
+                        if (n < 0) throw IOException(tr("файл змінився під час надсилання", "файл изменился во время отправки"))
                         sink.write(buffer, 0, n)
                         remaining -= n
                         sent += n
@@ -318,7 +319,7 @@ class Api(
                     var left = size
                     while (left > 0) {
                         val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
-                        if (n < 0) throw IOException("файл змінився під час надсилання")
+                        if (n < 0) throw IOException(tr("файл змінився під час надсилання", "файл изменился во время отправки"))
                         sink.write(buffer, 0, n)
                         left -= n
                     }

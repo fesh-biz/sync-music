@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.ui
 
+import biz.fesh.syncmusic.shared.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -83,7 +84,7 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
                 }
                 if (volume.freeBytes >= 0) {
                     Text(
-                        "Вільно ${Format.bytes(volume.freeBytes)} з ${Format.bytes(volume.totalBytes)}",
+                        tr("Вільно ${Format.bytes(volume.freeBytes)} з ${Format.bytes(volume.totalBytes)}", "Свободно ${Format.bytes(volume.freeBytes)} из ${Format.bytes(volume.totalBytes)}"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -95,7 +96,7 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
                 )
                 if (volume.appPrivate) {
                     Text(
-                        "На цій версії Android на SD-карту можна писати лише в папку застосунку. Вона видаляється разом із застосунком.",
+                        tr("На цій версії Android на SD-карту можна писати лише в папку застосунку. Вона видаляється разом із застосунком.", "В этой версии Android на SD-карту можно записывать только в папку приложения. Она удаляется вместе с приложением."),
                         style = MaterialTheme.typography.bodySmall,
                         color = Amber,
                     )
@@ -104,22 +105,22 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     if (current.path != volume.root.path) {
                         item {
-                            FolderLine("‹  На рівень вище") { current.parentFile?.let { current = it } }
+                            FolderLine(tr("‹  На рівень вище", "‹  На уровень выше")) { current.parentFile?.let { current = it } }
                         }
                     }
                     when {
-                        children == null -> item { Hint("Немає доступу до цієї папки") }
-                        children.isEmpty() -> item { Hint("Тут немає вкладених папок") }
+                        children == null -> item { Hint(tr("Немає доступу до цієї папки", "Нет доступа к этой папке")) }
+                        children.isEmpty() -> item { Hint(tr("Тут немає вкладених папок", "Здесь нет вложенных папок")) }
                         else -> items(children, key = { it.path }) { dir -> FolderLine(dir.name) { current = dir } }
                     }
                 }
                 HorizontalDivider()
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDismiss) { Text("Скасувати") }
+                    TextButton(onClick = onDismiss) { Text(tr("Скасувати", "Отмена")) }
                     Spacer(Modifier.weight(1f))
-                    OutlinedButton(onClick = { creating = true }) { Text("Нова папка") }
+                    OutlinedButton(onClick = { creating = true }) { Text(tr("Нова папка", "Новая папка")) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onPick(current.path) }) { Text("Вибрати цю папку") }
+                    Button(onClick = { onPick(current.path) }) { Text(tr("Вибрати цю папку", "Выбрать эту папку")) }
                 }
             }
         }
@@ -130,10 +131,10 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
         var error by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { creating = false },
-            title = { Text("Нова папка") },
+            title = { Text(tr("Нова папка", "Новая папка")) },
             text = {
                 Column {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, placeholder = { Text("Назва") })
+                    OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, placeholder = { Text(tr("Назва", "Название")) })
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             },
@@ -141,7 +142,7 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
                 TextButton(onClick = {
                     val clean = name.trim()
                     if (clean.isEmpty() || clean.contains('/') || clean.startsWith(".")) {
-                        error = "Недопустима назва"
+                        error = tr("Недопустима назва", "Недопустимое название")
                     } else {
                         val dir = File(current, clean)
                         if (dir.isDirectory || dir.mkdirs()) {
@@ -149,12 +150,12 @@ fun FolderPickerDialog(title: String, initialPath: String?, onPick: (String) -> 
                             refresh++
                             current = dir
                         } else {
-                            error = "Не вдалося створити папку"
+                            error = tr("Не вдалося створити папку", "Не удалось создать папку")
                         }
                     }
-                }) { Text("Створити") }
+                }) { Text(tr("Створити", "Создать")) }
             },
-            dismissButton = { TextButton(onClick = { creating = false }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { creating = false }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
 }

@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.tr
 import biz.fesh.syncmusic.shared.FileNames
 import biz.fesh.syncmusic.shared.FmCommand
 import biz.fesh.syncmusic.shared.FmOp
@@ -237,7 +238,7 @@ class FileManager(private val app: AppController) {
         link.replies[id] = deferred
         try {
             link.queue.send(QueuedCommand(FmCommand(id, op, path, name), System.currentTimeMillis()))
-            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: FmReply(id, ok = false, error = "Телефон не відповідає")
+            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: FmReply(id, ok = false, error = tr("Телефон не відповідає", "Телефон не отвечает"))
         } finally {
             link.replies.remove(id)
         }
@@ -272,7 +273,7 @@ class FileManager(private val app: AppController) {
                     if (move && added.size == before) pruneEmptyPc(file)
                 }
             }
-            enqueue(added, if (move) "з комп'ютера (переміщення)" else "з комп'ютера")
+            enqueue(added, if (move) tr("з комп'ютера (переміщення)", "с компьютера (перемещение)") else tr("з комп'ютера", "с компьютера"))
         }
     }
 
@@ -303,10 +304,10 @@ class FileManager(private val app: AppController) {
                 }
                 val tree = request(deviceId, FmOp.TREE, item.path, 120_000)
                 if (!tree.ok) {
-                    _notice.value = "Не вдалося прочитати папку «${item.name}» на телефоні: ${tree.error}"
+                    _notice.value = tr("Не вдалося прочитати папку «${item.name}» на телефоні: ${tree.error}", "Не удалось прочитать папку «${item.name}» на телефоне: ${tree.error}")
                     continue
                 }
-                if (tree.truncated) _notice.value = "У папці «${item.name}» забагато файлів — копіюються перші ${Format.number(tree.entries.size.toLong())}"
+                if (tree.truncated) _notice.value = tr("У папці «${item.name}» забагато файлів — копіюються перші ${Format.number(tree.entries.size.toLong())}", "В папке «${item.name}» слишком много файлов — копируются первые ${Format.number(tree.entries.size.toLong())}")
                 val root = File(pcDir, FileNames.safeName(item.name))
                 for (entry in tree.entries) {
                     if (entry.dir) continue
@@ -318,7 +319,7 @@ class FileManager(private val app: AppController) {
                 }
                 if (move && tree.entries.none { !it.dir }) request(deviceId, FmOp.PRUNE, item.path)
             }
-            enqueue(added, if (move) "з телефона (переміщення)" else "з телефона")
+            enqueue(added, if (move) tr("з телефона (переміщення)", "с телефона (перемещение)") else tr("з телефона", "с телефона"))
         }
     }
 
@@ -386,7 +387,7 @@ class FileManager(private val app: AppController) {
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             AppLog.w("Copying ${job.source} failed", e)
-            FmReply(job.id, ok = false, error = e.message ?: "помилка")
+            FmReply(job.id, ok = false, error = e.message ?: tr("помилка", "ошибка"))
         } finally {
             pcFiles.remove(job.id)
         }
@@ -414,10 +415,10 @@ class FileManager(private val app: AppController) {
         if (job.move) {
             if (job.toPhone) {
                 val ok = withContext(Dispatchers.IO) { PcFiles.toRecycleBin(File(job.source)) }
-                if (!ok) _notice.value = "Файл «${job.name}» скопійовано, але не вдалося перемістити його в кошик на комп'ютері"
+                if (!ok) _notice.value = tr("Файл «${job.name}» скопійовано, але не вдалося перемістити його в кошик на комп'ютері", "Файл «${job.name}» скопирован, но не удалось переместить его в корзину на компьютере")
             } else {
                 val reply = request(job.deviceId, FmOp.DELETE, job.source)
-                if (!reply.ok) _notice.value = "Файл «${job.name}» скопійовано, але на телефоні його не вдалося видалити: ${reply.error}"
+                if (!reply.ok) _notice.value = tr("Файл «${job.name}» скопійовано, але на телефоні його не вдалося видалити: ${reply.error}", "Файл «${job.name}» скопирован, но на телефоне его не удалось удалить: ${reply.error}")
             }
         }
         if (job.openWhenDone) PcFiles.open(File(job.targetDir, savedAs))
@@ -438,7 +439,7 @@ class FileManager(private val app: AppController) {
         var error: String? = null
         for (path in paths) {
             val reply = request(deviceId, FmOp.DELETE, path, 300_000)
-            if (!reply.ok && error == null) error = reply.error ?: "помилка"
+            if (!reply.ok && error == null) error = reply.error ?: tr("помилка", "ошибка")
         }
         AppLog.i("File window: deleted ${paths.size} items on the phone")
         refreshPanels()
@@ -449,7 +450,7 @@ class FileManager(private val app: AppController) {
     suspend fun deletePc(files: List<File>): String? = withContext(Dispatchers.IO) {
         var error: String? = null
         for (file in files) {
-            if (!PcFiles.toRecycleBin(file) && error == null) error = "Не вдалося перемістити «${file.name}» у кошик"
+            if (!PcFiles.toRecycleBin(file) && error == null) error = tr("Не вдалося перемістити «${file.name}» у кошик", "Не удалось переместить «${file.name}» в корзину")
         }
         AppLog.i("File window: ${files.size} items to the Recycle Bin")
         refreshPanels()
@@ -464,7 +465,7 @@ class FileManager(private val app: AppController) {
 
     private suspend fun toPhone(job: CopyJob): FmReply {
         val file = File(job.source)
-        if (!file.isFile) return FmReply(job.id, ok = false, error = "Файл не знайдено на комп'ютері")
+        if (!file.isFile) return FmReply(job.id, ok = false, error = tr("Файл не знайдено на комп'ютері", "Файл не найден на компьютере"))
         pcFiles[job.id] = file
         return send(job, FmCommand(job.id, FmOp.PULL, job.targetDir, job.name, file.length(), file.lastModified()))
     }
@@ -477,7 +478,7 @@ class FileManager(private val app: AppController) {
             existing.isFile && FileNames.sameFile(existing.length(), existing.lastModified(), job.size, job.modified)
         }
         if (same) return FmReply(job.id, skipped = true, savedAs = job.name)
-        if (!dir.isDirectory) return FmReply(job.id, ok = false, error = "Не вдалося створити папку ${dir.path}")
+        if (!dir.isDirectory) return FmReply(job.id, ok = false, error = tr("Не вдалося створити папку ${dir.path}", "Не удалось создать папку ${dir.path}"))
         pcFiles[job.id] = existing
         return send(job, FmCommand(job.id, FmOp.PUSH, job.source, job.name, job.size, job.modified))
     }
@@ -494,7 +495,7 @@ class FileManager(private val app: AppController) {
             var lastChange = System.currentTimeMillis()
             while (true) {
                 withTimeoutOrNull(1_000) { deferred.await() }?.let { return it }
-                if (job.id in cancelled) return FmReply(job.id, ok = false, error = "Скасовано")
+                if (job.id in cancelled) return FmReply(job.id, ok = false, error = tr("Скасовано", "Отменено"))
                 val bytes = counter?.get() ?: 0
                 val now = System.currentTimeMillis()
                 if (bytes != lastBytes) {
@@ -502,7 +503,7 @@ class FileManager(private val app: AppController) {
                     lastChange = now
                 }
                 if (now - lastChange > STALL_MS) {
-                    return FmReply(job.id, ok = false, error = if (isOnline(job.deviceId)) "Телефон не відповідає" else OFFLINE)
+                    return FmReply(job.id, ok = false, error = if (isOnline(job.deviceId)) tr("Телефон не відповідає", "Телефон не отвечает") else OFFLINE)
                 }
             }
         } finally {
@@ -531,7 +532,7 @@ class FileManager(private val app: AppController) {
     fun receiveUpload(deviceId: String, id: String, declaredSize: Long?, input: InputStream): String? {
         val job = job(id)
         val target = pcFiles[id]
-        if (job == null || target == null || job.toPhone || job.deviceId != deviceId) return "Копіювання вже не виконується"
+        if (job == null || target == null || job.toPhone || job.deviceId != deviceId) return tr("Копіювання вже не виконується", "Копирование уже не выполняется")
         // The phone knows the real size (the listing may be older); the queue shows it from now on.
         val size = declaredSize?.takeIf { it >= 0 } ?: job.size
         if (size != job.size) update(id) { it.copy(size = size) }
@@ -541,11 +542,11 @@ class FileManager(private val app: AppController) {
         val temp = File(tempDir, "fm-$id.part")
         try {
             val free = dir.usableSpace
-            if (free > 0 && free < size + RESERVE_BYTES) return fail(deviceId, id, "На комп'ютері недостатньо місця")
+            if (free > 0 && free < size + RESERVE_BYTES) return fail(deviceId, id, tr("На комп'ютері недостатньо місця", "На компьютере недостаточно места"))
             FileOutputStream(temp).use { out ->
                 val buffer = ByteArray(256 * 1024)
                 while (true) {
-                    if (id in cancelled) throw IOException("Скасовано")
+                    if (id in cancelled) throw IOException(tr("Скасовано", "Отменено"))
                     val n = input.read(buffer)
                     if (n < 0) break
                     out.write(buffer, 0, n)
@@ -554,7 +555,7 @@ class FileManager(private val app: AppController) {
             }
             if (temp.length() != size) {
                 temp.delete()
-                return fail(deviceId, id, "Файл отримано не повністю")
+                return fail(deviceId, id, tr("Файл отримано не повністю", "Файл получен не полностью"))
             }
             val dest = Transfers.destinationFor(target, temp)
             val reply = if (dest == null) {
@@ -569,7 +570,7 @@ class FileManager(private val app: AppController) {
             return null
         } catch (e: Throwable) {
             temp.delete()
-            return fail(deviceId, id, e.message ?: "помилка запису")
+            return fail(deviceId, id, e.message ?: tr("помилка запису", "ошибка записи"))
         } finally {
             tempDir.delete() // only when empty
         }
@@ -581,8 +582,8 @@ class FileManager(private val app: AppController) {
     }
 
     companion object {
-        const val OFFLINE = "Телефон не на зв'язку"
-        const val OLD_PHONE = "Оновіть Sync Music на телефоні: ця версія вміє лише копіювати файли"
+        val OFFLINE: String get() = tr("Телефон не на зв'язку", "Телефон не на связи")
+        val OLD_PHONE: String get() = tr("Оновіть Sync Music на телефоні: ця версія вміє лише копіювати файли", "Обновите Sync Music на телефоне: эта версия умеет только копировать файлы")
         private const val STALE_MS = 60_000L
         private const val STALL_MS = 60_000L
         private const val MAX_JOBS = 100_000
@@ -627,6 +628,6 @@ object PcFiles {
         null
     } catch (e: Throwable) {
         AppLog.w("Cannot open ${file.path}", e)
-        "Не вдалося відкрити «${file.name}»"
+        tr("Не вдалося відкрити «${file.name}»", "Не удалось открыть «${file.name}»")
     }
 }

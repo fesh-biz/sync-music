@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.sync
 
+import biz.fesh.syncmusic.shared.tr
 import android.content.Context
 import android.util.Log
 import biz.fesh.syncmusic.BuildConfig
@@ -83,7 +84,7 @@ object SyncEngine {
         if (!locked) return Outcome.BUSY
         try {
             if (config.paused.value) return Outcome.PAUSED
-            _state.value = EngineState(running = true, note = "Пошук комп'ютера…")
+            _state.value = EngineState(running = true, note = tr("Пошук комп'ютера…", "Поиск компьютера…"))
             return coroutineScope {
                 val session = async { Session(context.applicationContext, goForeground).run() }
                 current = session
@@ -237,13 +238,13 @@ private class Session(
 
     suspend fun run(): Outcome {
         val server = config.server.value ?: return note(Outcome.NOT_PAIRED, null)
-        if (server.revoked) return note(Outcome.UNAUTHORIZED, "Комп'ютер відключив цей телефон")
-        if (!Storage.hasAccess(ctx)) return note(Outcome.NO_ACCESS, "Немає доступу до пам'яті телефона — відкрийте застосунок і дозвольте доступ")
-        val network = WifiNet.find(ctx) ?: return note(Outcome.NO_WIFI, "Немає підключення до Wi-Fi")
+        if (server.revoked) return note(Outcome.UNAUTHORIZED, tr("Комп'ютер відключив цей телефон", "Компьютер отключил этот телефон"))
+        if (!Storage.hasAccess(ctx)) return note(Outcome.NO_ACCESS, tr("Немає доступу до пам'яті телефона — відкрийте застосунок і дозвольте доступ", "Нет доступа к памяти телефона — откройте приложение и разрешите доступ"))
+        val network = WifiNet.find(ctx) ?: return note(Outcome.NO_WIFI, tr("Немає підключення до Wi-Fi", "Нет подключения к Wi-Fi"))
         val http = Http.client(network)
 
         val api = resolve(server, http, network)
-            ?: return note(Outcome.NOT_FOUND, "Комп'ютер «${server.serverName}» не знайдено. Запустіть Sync Music на ПК.")
+            ?: return note(Outcome.NOT_FOUND, tr("Комп'ютер «${server.serverName}» не знайдено. Запустіть Sync Music на ПК.", "Компьютер «${server.serverName}» не найден. Запустите Sync Music на ПК."))
 
         phase = SyncPhase.CONNECTING
         SyncEngine.publish(EngineState(running = true, progress = snapshot()))
@@ -252,11 +253,11 @@ private class Session(
             withContext(Dispatchers.IO) { api.folders() }
         } catch (e: UnauthorizedException) {
             config.updateServer { it.copy(revoked = true) }
-            return note(Outcome.UNAUTHORIZED, "Комп'ютер відключив цей телефон. Підключіться знову.")
+            return note(Outcome.UNAUTHORIZED, tr("Комп'ютер відключив цей телефон. Підключіться знову.", "Компьютер отключил этот телефон. Подключитесь снова."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            return finish(api, SyncPhase.ERROR, "Не вдалося отримати список папок: ${e.message}", Outcome.FAILED)
+            return finish(api, SyncPhase.ERROR, tr("Не вдалося отримати список папок: ${e.message}", "Не удалось получить список папок: ${e.message}"), Outcome.FAILED)
         }
         config.setFolders(folders)
         val pcProblems = try {
@@ -351,7 +352,7 @@ private class Session(
                         if (!state.mapping.enabled) continue
                         val path = state.mapping.localPath
                         if (path == null) {
-                            state.message = "Виберіть папку на телефоні"
+                            state.message = tr("Виберіть папку на телефоні", "Выберите папку на телефоне")
                             continue
                         }
                         try {
@@ -404,15 +405,15 @@ private class Session(
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
-                val text = if (config.paused.value) "Синхронізацію призупинено" else "Синхронізацію перервано, продовжиться пізніше"
+                val text = if (config.paused.value) tr("Синхронізацію призупинено", "Синхронизация приостановлена") else tr("Синхронізацію перервано, продовжиться пізніше", "Синхронизация прервана, продолжится позже")
                 finish(api, SyncPhase.STOPPED, text, Outcome.STOPPED)
             }
             throw e
         } catch (e: UnauthorizedException) {
             config.updateServer { it.copy(revoked = true) }
-            return finish(api, SyncPhase.ERROR, "Комп'ютер відключив цей телефон", Outcome.UNAUTHORIZED, report = false)
+            return finish(api, SyncPhase.ERROR, tr("Комп'ютер відключив цей телефон", "Компьютер отключил этот телефон"), Outcome.UNAUTHORIZED, report = false)
         } catch (e: Throwable) {
-            return finish(api, SyncPhase.ERROR, "Зв'язок із комп'ютером втрачено: ${e.message}", Outcome.FAILED)
+            return finish(api, SyncPhase.ERROR, tr("Зв'язок із комп'ютером втрачено: ${e.message}", "Связь с компьютером потеряна: ${e.message}"), Outcome.FAILED)
         } finally {
             withContext(NonCancellable + Dispatchers.IO) {
                 dbs.forEach { it.save() }
@@ -437,7 +438,7 @@ private class Session(
 
     private fun planDown(api: Api, server: PairedServer, state: FolderState, root: File): DownPlan? {
         if (!root.isDirectory && !root.mkdirs()) {
-            state.message = "Не вдалося створити папку на телефоні"
+            state.message = tr("Не вдалося створити папку на телефоні", "Не удалось создать папку на телефоне")
             return null
         }
         val tmpDir = File(root, Protocol.TEMP_DIR)
@@ -495,9 +496,9 @@ private class Session(
         if (plan.pcEmpty) {
             // Safety net: never wipe the phone because the PC reported an empty folder.
             plan.state.message = if (plan.state.info.fileTypes == FileTypes.ALL) {
-                "На комп'ютері папка порожня — видалення пропущено"
+                tr("На комп'ютері папка порожня — видалення пропущено", "На компьютере папка пуста — удаление пропущено")
             } else {
-                "На комп'ютері в папці немає файлів вибраного типу — видалення пропущено"
+                tr("На комп'ютері в папці немає файлів вибраного типу — видалення пропущено", "На компьютере в папке нет файлов выбранного типа — удаление пропущено")
             }
             return
         }
@@ -544,7 +545,7 @@ private class Session(
             val free = Storage.freeBytes(plan.root)
             freeSpace = free
             if (free >= 0 && free < entry.size - have + RESERVE_BYTES) {
-                message = "Недостатньо місця на телефоні"
+                message = tr("Недостатньо місця на телефоні", "Недостаточно места на телефоне")
                 state.message = message
                 return true
             }
@@ -568,7 +569,7 @@ private class Session(
                     )
                     if (part.length() != entry.size) {
                         part.delete()
-                        throw IOException("розмір файлу не збігся")
+                        throw IOException(tr("розмір файлу не збігся", "размер файла не совпал"))
                     }
                     break
                 } catch (e: FileGoneException) {
@@ -614,7 +615,7 @@ private class Session(
             if (downloaded % 10 == 0) plan.db.save()
         }
         currentFile = null
-        if (skipped > 0 && state.message == null) state.message = "Пропущено файлів: $skipped (змінилися на комп'ютері)"
+        if (skipped > 0 && state.message == null) state.message = tr("Пропущено файлів: $skipped (змінилися на комп'ютері)", "Пропущено файлов: $skipped (изменились на компьютере)")
         return false
     }
 
@@ -622,7 +623,7 @@ private class Session(
 
     private fun planUp(api: Api, server: PairedServer, state: FolderState, root: File): UpPlan? {
         if (!root.isDirectory) {
-            state.message = "Папку на телефоні не знайдено"
+            state.message = tr("Папку на телефоні не знайдено", "Папка на телефоне не найдена")
             return null
         }
         val all = Storage.listLocal(root)
@@ -664,7 +665,7 @@ private class Session(
         state.totalBytes = totalBytes
         state.syncedFiles = okFiles
         state.syncedBytes = okBytes
-        if (badNames > 0) state.message = "Пропущено ${badNames} файлів з назвами, недопустимими у Windows"
+        if (badNames > 0) state.message = tr("Пропущено ${badNames} файлів з назвами, недопустимими у Windows", "Пропущено ${badNames} файлов с названиями, недопустимыми в Windows")
 
         // Files deleted on the phone stay on the PC: nothing is ever deleted there.
         // Records of files the filter skips stay: switching back to all files must not send them again.
@@ -721,11 +722,11 @@ private class Session(
                     UploadResult.Complete -> done = true
                     is UploadResult.Partial, is UploadResult.Conflict -> {
                         attempts++
-                        if (attempts >= 5) throw IOException("не вдалося надіслати ${local.path}")
+                        if (attempts >= 5) throw IOException(tr("не вдалося надіслати ${local.path}", "не удалось отправить ${local.path}"))
                         offset = if (result is UploadResult.Partial) result.offset else (result as UploadResult.Conflict).offset
                     }
                     UploadResult.NoSpace -> {
-                        message = "На комп'ютері недостатньо місця"
+                        message = tr("На комп'ютері недостатньо місця", "На компьютере недостаточно места")
                         state.message = message
                         currentFile = null
                         currentBytes = 0

@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.files
 
+import biz.fesh.syncmusic.shared.tr
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -164,7 +165,7 @@ class FileAccessService : Service() {
                 throw e
             } catch (e: Throwable) {
                 Log.w(TAG, "${command.op} ${command.path} failed", e)
-                FmReply(command.id, ok = false, error = e.message ?: "помилка")
+                FmReply(command.id, ok = false, error = e.message ?: tr("помилка", "ошибка"))
             }
             lastWanted = System.currentTimeMillis()
             answer(api, reply)
@@ -204,7 +205,7 @@ class FileAccessService : Service() {
             else -> FmReply(command.id, ok = false, error = "unsupported")
         }
     } catch (e: Throwable) {
-        FmReply(command.id, ok = false, error = e.message ?: "помилка")
+        FmReply(command.id, ok = false, error = e.message ?: tr("помилка", "ошибка"))
     }
 
     private fun list(command: FmCommand): FmReply {
@@ -222,8 +223,8 @@ class FileAccessService : Service() {
             }
             return FmReply(command.id, volumes = volumes)
         }
-        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = "Ця папка недоступна")
-        val files = File(command.path).listFiles() ?: return FmReply(command.id, ok = false, error = "Немає доступу до папки")
+        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = tr("Ця папка недоступна", "Эта папка недоступна"))
+        val files = File(command.path).listFiles() ?: return FmReply(command.id, ok = false, error = tr("Немає доступу до папки", "Нет доступа к папке"))
         val entries = files
             .filter { !it.name.startsWith(".") }
             .map { FmEntry(it.name, it.isDirectory, if (it.isFile) it.length() else 0, it.lastModified()) }
@@ -231,9 +232,9 @@ class FileAccessService : Service() {
     }
 
     private fun tree(command: FmCommand): FmReply {
-        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = "Ця папка недоступна")
+        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = tr("Ця папка недоступна", "Эта папка недоступна"))
         val root = File(command.path)
-        if (!root.isDirectory) return FmReply(command.id, ok = false, error = "Папку не знайдено")
+        if (!root.isDirectory) return FmReply(command.id, ok = false, error = tr("Папку не знайдено", "Папка не найдена"))
         val entries = ArrayList<FmEntry>()
         var truncated = false
         fun walk(dir: File, prefix: String) {
@@ -258,10 +259,10 @@ class FileAccessService : Service() {
 
     private fun mkdir(command: FmCommand): FmReply {
         val name = command.path.trimEnd('/').substringAfterLast('/')
-        if (!allowed(command.path) || !PhoneStorage.isValidName(name)) return FmReply(command.id, ok = false, error = "Недопустима назва папки")
+        if (!allowed(command.path) || !PhoneStorage.isValidName(name)) return FmReply(command.id, ok = false, error = tr("Недопустима назва папки", "Недопустимое название папки"))
         val dir = File(command.path)
-        if (dir.exists()) return FmReply(command.id, ok = false, error = "Така назва вже є")
-        return if (dir.mkdirs()) FmReply(command.id) else FmReply(command.id, ok = false, error = "Не вдалося створити папку")
+        if (dir.exists()) return FmReply(command.id, ok = false, error = tr("Така назва вже є", "Такое название уже есть"))
+        return if (dir.mkdirs()) FmReply(command.id) else FmReply(command.id, ok = false, error = tr("Не вдалося створити папку", "Не удалось создать папку"))
     }
 
     /** A storage's own root is never deleted, renamed or pruned. */
@@ -269,7 +270,7 @@ class FileAccessService : Service() {
         Storage.volumes(this).any { it.root.path.trimEnd('/') == path.trimEnd('/') }
 
     private fun delete(command: FmCommand): FmReply {
-        if (!allowed(command.path) || isVolumeRoot(command.path)) return FmReply(command.id, ok = false, error = "Цю папку не можна видалити")
+        if (!allowed(command.path) || isVolumeRoot(command.path)) return FmReply(command.id, ok = false, error = tr("Цю папку не можна видалити", "Эту папку нельзя удалить"))
         val target = File(command.path)
         if (!target.exists()) return FmReply(command.id)
         val removed = ArrayList<String>()
@@ -288,25 +289,25 @@ class FileAccessService : Service() {
         }
         Storage.scan(this, removed.take(MAX_SCAN))
         Log.i(TAG, "Deleted ${command.path} (${removed.size} files)")
-        return if (ok) FmReply(command.id) else FmReply(command.id, ok = false, error = "Не все вдалося видалити")
+        return if (ok) FmReply(command.id) else FmReply(command.id, ok = false, error = tr("Не все вдалося видалити", "Не всё удалось удалить"))
     }
 
     private fun rename(command: FmCommand): FmReply {
         val name = command.name
         if (!allowed(command.path) || isVolumeRoot(command.path) || !PhoneStorage.isValidName(name)) {
-            return FmReply(command.id, ok = false, error = "Недопустима назва")
+            return FmReply(command.id, ok = false, error = tr("Недопустима назва", "Недопустимое название"))
         }
         val source = File(command.path)
-        if (!source.exists()) return FmReply(command.id, ok = false, error = "Файл не знайдено на телефоні")
+        if (!source.exists()) return FmReply(command.id, ok = false, error = tr("Файл не знайдено на телефоні", "Файл не найден на телефоне"))
         val target = File(source.parentFile, name)
-        if (target.exists() && !target.path.equals(source.path, ignoreCase = true)) return FmReply(command.id, ok = false, error = "Така назва вже є")
-        if (!source.renameTo(target)) return FmReply(command.id, ok = false, error = "Не вдалося перейменувати")
+        if (target.exists() && !target.path.equals(source.path, ignoreCase = true)) return FmReply(command.id, ok = false, error = tr("Така назва вже є", "Такое название уже есть"))
+        if (!source.renameTo(target)) return FmReply(command.id, ok = false, error = tr("Не вдалося перейменувати", "Не удалось переименовать"))
         if (target.isFile) Storage.scan(this, listOf(source.path, target.path))
         return FmReply(command.id, savedAs = name)
     }
 
     private fun prune(command: FmCommand): FmReply {
-        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = "Ця папка недоступна")
+        if (!allowed(command.path)) return FmReply(command.id, ok = false, error = tr("Ця папка недоступна", "Эта папка недоступна"))
         val root = File(command.path)
         if (!root.isDirectory) return FmReply(command.id)
         val keepRoot = isVolumeRoot(command.path)
@@ -324,23 +325,23 @@ class FileAccessService : Service() {
     private fun pull(api: Api, command: FmCommand): FmReply {
         val name = command.name
         if (!allowed(command.path) || name.isEmpty() || name.contains('/') || name == "." || name == "..") {
-            return FmReply(command.id, ok = false, error = "Ця папка телефона недоступна")
+            return FmReply(command.id, ok = false, error = tr("Ця папка телефона недоступна", "Эта папка телефона недоступна"))
         }
         val dir = File(command.path)
         dir.mkdirs()
-        if (!dir.isDirectory) return FmReply(command.id, ok = false, error = "Не вдалося створити папку на телефоні")
+        if (!dir.isDirectory) return FmReply(command.id, ok = false, error = tr("Не вдалося створити папку на телефоні", "Не удалось создать папку на телефоне"))
         val target = File(dir, name)
         if (target.isFile && FileNames.sameFile(target.length(), target.lastModified(), command.size, command.modified)) {
             return FmReply(command.id, skipped = true, savedAs = name)
         }
         val free = Storage.freeBytes(dir)
-        if (free in 0 until command.size + RESERVE_BYTES) return FmReply(command.id, ok = false, error = "На телефоні недостатньо місця")
+        if (free in 0 until command.size + RESERVE_BYTES) return FmReply(command.id, ok = false, error = tr("На телефоні недостатньо місця", "На телефоне недостаточно места"))
         val tempDir = File(dir, Protocol.TEMP_DIR)
         val part = File(tempDir, "fm-${command.id}.part")
         try {
             tempDir.mkdirs()
             api.fmDownload(command.id, part)
-            if (part.length() != command.size) throw IOException("Файл отримано не повністю")
+            if (part.length() != command.size) throw IOException(tr("Файл отримано не повністю", "Файл получен не полностью"))
             val dest = destination(target, part) ?: return FmReply(command.id, skipped = true, savedAs = name)
             if (!part.renameTo(dest)) {
                 part.copyTo(dest)
@@ -359,7 +360,7 @@ class FileAccessService : Service() {
         if (sameContent(target, received)) return null
         var n = 1
         while (true) {
-            val candidate = File(target.parentFile, FileNames.copyName(target.name, "з комп'ютера", n))
+            val candidate = File(target.parentFile, FileNames.copyName(target.name, tr("з комп'ютера", "с компьютера"), n))
             if (!candidate.exists()) return candidate
             if (sameContent(candidate, received)) return null
             n++
@@ -396,7 +397,7 @@ class FileAccessService : Service() {
     /** Phone → PC. */
     private fun push(api: Api, command: FmCommand): FmReply {
         val file = File(command.path)
-        if (!allowed(command.path) || !file.isFile) return FmReply(command.id, ok = false, error = "Файл не знайдено на телефоні")
+        if (!allowed(command.path) || !file.isFile) return FmReply(command.id, ok = false, error = tr("Файл не знайдено на телефоні", "Файл не найден на телефоне"))
         api.fmUpload(command.id, file)
         return FmReply(command.id)
     }
@@ -404,7 +405,7 @@ class FileAccessService : Service() {
     // ---------------------------------------------------------------- notification
 
     private fun notification(): Notification {
-        val server = Config.get(this).server.value?.serverName ?: "комп'ютер"
+        val server = Config.get(this).server.value?.serverName ?: tr("комп'ютер", "компьютер")
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -419,12 +420,12 @@ class FileAccessService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_sync)
-            .setContentTitle("Доступ до файлів з комп'ютера")
-            .setContentText("«$server» може переглядати й копіювати файли телефона")
+            .setContentTitle(tr("Доступ до файлів з комп'ютера", "Доступ к файлам с компьютера"))
+            .setContentText(tr("«$server» може переглядати й копіювати файли телефона", "«$server» может просматривать и копировать файлы телефона"))
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(open)
-            .addAction(R.drawable.ic_stat_sync, "Вимкнути", stop)
+            .addAction(R.drawable.ic_stat_sync, tr("Вимкнути", "Выключить"), stop)
             .build()
     }
 
@@ -448,8 +449,8 @@ class FileAccessService : Service() {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val nm = context.getSystemService(NotificationManager::class.java) ?: return
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Доступ до файлів з комп'ютера", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Показується, поки комп'ютер може переглядати й копіювати файли телефона"
+                NotificationChannel(CHANNEL, tr("Доступ до файлів з комп'ютера", "Доступ к файлам с компьютера"), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = tr("Показується, поки комп'ютер може переглядати й копіювати файли телефона", "Показывается, пока компьютер может просматривать и копировать файлы телефона")
                     setShowBadge(false)
                 },
             )

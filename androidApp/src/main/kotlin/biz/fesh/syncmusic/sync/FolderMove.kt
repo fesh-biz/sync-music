@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.sync
 
+import biz.fesh.syncmusic.shared.tr
 import android.content.Context
 import android.util.Log
 import biz.fesh.syncmusic.data.Config
@@ -97,13 +98,13 @@ object FolderMove {
             val volume = Storage.volumeOf(volumes, target)
             if (volume == null) {
                 // E.g. the SD card is out right now: try again on the next sync.
-                problems[folder.id] = "Папку, вибрану на комп'ютері, не знайдено на телефоні (SD-карту вийнято?)"
+                problems[folder.id] = tr("Папку, вибрану на комп'ютері, не знайдено на телефоні (SD-карту вийнято?)", "Папка, выбранная на компьютере, не найдена на телефоне (SD-карта извлечена?)")
                 continue
             }
             val dir = File(target)
             val problem = when {
-                target.split('/').any { it == ".." || it == "." } -> "Недопустима папка, вибрана на комп'ютері"
-                folder.direction == Direction.TO_PC && !dir.isDirectory -> "Папки «${Storage.describe(volumes, target)}», вибраної на комп'ютері, на телефоні немає"
+                target.split('/').any { it == ".." || it == "." } -> tr("Недопустима папка, вибрана на комп'ютері", "Недопустимая папка, выбранная на компьютере")
+                folder.direction == Direction.TO_PC && !dir.isDirectory -> tr("Папки «${Storage.describe(volumes, target)}», вибраної на комп'ютері, на телефоні немає", "Папки «${Storage.describe(volumes, target)}», выбранной на компьютере, на телефоне нет")
                 else -> null
             }
             if (problem != null) {
@@ -113,7 +114,7 @@ object FolderMove {
             }
             change(context, config, serverId, folder, mapping, target, folder.phoneDeleteOld, folder.phonePathAt)
             if (folder.direction == Direction.TO_PHONE && !dir.isDirectory && !dir.mkdirs()) {
-                problems[folder.id] = "Не вдалося створити папку «${Storage.describe(volumes, target)}»"
+                problems[folder.id] = tr("Не вдалося створити папку «${Storage.describe(volumes, target)}»", "Не удалось создать папку «${Storage.describe(volumes, target)}»")
             }
             Log.i(TAG, "${folder.name}: folder chosen on the PC: $target")
         }

@@ -202,7 +202,7 @@ data class PhoneStorage(
     companion object {
         /** Internal memory on practically every Android phone (used before the phone reported its storage). */
         const val PRIMARY_ROOT = "/storage/emulated/0"
-        const val PRIMARY_LABEL = "Пам'ять телефона"
+        val PRIMARY_LABEL: String get() = tr("Пам'ять телефона", "Память телефона")
 
         fun inside(path: String, root: String): Boolean = path == root || path.startsWith(root.trimEnd('/') + "/")
 

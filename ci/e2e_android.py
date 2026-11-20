@@ -1364,6 +1364,34 @@ def scenario_remove_folder():
     shutil.rmtree(big)
 
 
+def scenario_russian():
+    """Both apps switch to Russian and back without a restart."""
+    pc_command("set-lang|ru")
+    pc_command("show-settings")
+    time.sleep(2)
+    settings = json.loads((DATA / "settings.json").read_text(encoding="utf-8"))
+    check("PC keeps the chosen language", settings.get("language") == "ru", settings.get("language"))
+    shot("15-ru-pc-settings")
+    pc_command("hide-dialog")
+    time.sleep(1)
+    shot("15b-ru-pc-main")
+    adb("shell", "am", "start", "-n", ACTIVITY)
+    time.sleep(2)
+    to_top()
+    check("Phone language switch is shown", tap_text("РУС", 20))
+    check("Phone app is in Russian", wait_for("Синхронизировать сейчас", 30) is not None)
+    to_top()
+    shot("15c-ru-phone")
+    cold_start("Russian")
+    check("Phone keeps Russian after a restart", wait_for("Синхронизировать сейчас", 30) is not None)
+    # Back to Ukrainian: the other scenarios look for Ukrainian texts.
+    to_top()
+    tap_text("УКР", 20)
+    check("Phone app is back in Ukrainian", wait_for("Синхронізувати зараз", 30) is not None)
+    pc_command("set-lang|uk")
+    time.sleep(1)
+
+
 def scenario_revoke():
     pc_command("remove-devices")
     trigger_sync()
@@ -1382,7 +1410,7 @@ def main():
         scenario_initial(since)
         for scenario in (scenario_pc_delete, scenario_phone_delete, scenario_new_and_changed, scenario_resume, scenario_pause,
                          scenario_camera, scenario_docs, scenario_files, scenario_pc_picks_phone_folder, scenario_file_types, scenario_scale, scenario_scale_cleanup, scenario_sd_card,
-                         scenario_remove_folder, scenario_revoke):
+                         scenario_remove_folder, scenario_russian, scenario_revoke):
             if time.time() - STARTED > TIME_BUDGET:
                 check(f"{scenario.__name__} not run: e2e time budget used up", False)
                 continue

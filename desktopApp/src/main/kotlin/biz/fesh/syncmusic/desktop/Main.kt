@@ -1,9 +1,12 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.Lang
+import biz.fesh.syncmusic.shared.tr
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,6 +76,8 @@ fun main(args: Array<String>) {
         var visible by remember { mutableStateOf(!startMinimized) }
         val trayState = rememberTrayState()
         val settings by controller.settings.state.collectAsState()
+        // Everything is redrawn when the language changes (tr() reads it while the text is built).
+        val language = settings.language
 
         fun quit() {
             controller.shutdown()
@@ -86,8 +91,8 @@ fun main(args: Array<String>) {
                 tooltip = "Sync Music",
                 onAction = { controller.requestShowWindow() },
                 menu = {
-                    Item("Відкрити Sync Music", onClick = { controller.requestShowWindow() })
-                    Item("Вийти", onClick = { quit() })
+                    Item(tr("Відкрити Sync Music", "Открыть Sync Music"), onClick = { controller.requestShowWindow() })
+                    Item(tr("Вийти", "Выйти"), onClick = { quit() })
                 },
             )
         }
@@ -119,8 +124,8 @@ fun main(args: Array<String>) {
                     if (!settings.trayHintShown) {
                         trayState.sendNotification(
                             Notification(
-                                "Sync Music працює у фоні",
-                                "Синхронізація триває. Відкрити вікно можна через значок у треї.",
+                                tr("Sync Music працює у фоні", "Sync Music работает в фоне"),
+                                tr("Синхронізація триває. Відкрити вікно можна через значок у треї.", "Синхронизация продолжается. Открыть окно можно через значок в трее."),
                                 Notification.Type.Info,
                             ),
                         )
@@ -146,7 +151,7 @@ fun main(args: Array<String>) {
                     window.requestFocus()
                 }
             }
-            App(controller)
+            key(language) { App(controller) }
         }
 
         // The file window: PC and phone side by side.
@@ -156,7 +161,7 @@ fun main(args: Array<String>) {
             Window(
                 onCloseRequest = controller.files::closeWindow,
                 state = filesState,
-                title = "Sync Music — файли телефона",
+                title = tr("Sync Music — файли телефона", "Sync Music — файлы телефона"),
                 icon = appIcon,
                 onPreviewKeyEvent = filesKeys::onKeyEvent,
             ) {
@@ -164,7 +169,7 @@ fun main(args: Array<String>) {
                     window.toFront()
                     AppLog.i("File window shown")
                 }
-                FilesScreen(controller, filesKeys)
+                key(language) { FilesScreen(controller, filesKeys) }
             }
         }
     }
@@ -256,6 +261,8 @@ private fun mirrorStatus(controller: AppController) {
                         javax.swing.SwingUtilities.invokeLater { AppLog.i("fm-key $combo: " + filesKeys.press(combo)) }
                     }
                     "fm-theme" -> controller.setTheme(UiTheme.valueOf(parts[1]))
+                    // set-lang|uk or ru
+                    "set-lang" -> Lang.of(parts[1])?.let { controller.setLanguage(it) }
                     "show" -> controller.requestShowWindow()
                     "hide" -> controller.requestHideWindow()
                     "quit" -> {

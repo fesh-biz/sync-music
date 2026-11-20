@@ -1,5 +1,8 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.I18n
+import biz.fesh.syncmusic.shared.Lang
+import biz.fesh.syncmusic.shared.tr
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.FolderInfo
@@ -60,6 +63,11 @@ class AppController {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val settings = SettingsStore(File(AppPaths.dataDir, "settings.json"))
 
+    init {
+        // Before anything builds user-visible text.
+        I18n.lang = Lang.of(settings.value.language) ?: Lang.system()
+    }
+
     private val runtimes = java.util.concurrent.ConcurrentHashMap<String, FolderRuntime>()
     private val _runtimeVersion = MutableStateFlow(0)
     /** Changes whenever folder scanners are created or removed (the UI re-reads them). */
@@ -113,7 +121,7 @@ class AppController {
         } else {
             null
         }
-        env ?: host ?: "Комп'ютер"
+        env ?: host ?: tr("Комп'ютер", "Компьютер")
     }
 
     /** The file window: browsing the phone and copying files both ways. */
@@ -309,9 +317,9 @@ class AppController {
     /** Adds a PC folder (PC → phone by default). Returns an error text or null. */
     fun addFolder(path: String, direction: Direction = Direction.TO_PHONE, deleteMissing: Boolean? = null): String? {
         val dir = File(path)
-        if (!dir.isDirectory) return "Папку не знайдено"
+        if (!dir.isDirectory) return tr("Папку не знайдено", "Папка не найдена")
         val canonical = try { dir.canonicalPath } catch (_: Throwable) { dir.absolutePath }
-        if (settings.value.folders.any { sameFile(it.path, canonical) }) return "Ця папка вже синхронізується"
+        if (settings.value.folders.any { sameFile(it.path, canonical) }) return tr("Ця папка вже синхронізується", "Эта папка уже синхронизируется")
         val baseName = dir.name.ifBlank { canonical }
         var name = baseName
         var n = 2
@@ -381,7 +389,7 @@ class AppController {
                 ServerState.Running(port)
             } catch (t: Throwable) {
                 AppLog.e("Cannot start server on $port", t)
-                ServerState.Failed("Порт $port зайнятий іншою програмою")
+                ServerState.Failed(tr("Порт $port зайнятий іншою програмою", "Порт $port занят другой программой"))
             }
         }
     }
@@ -446,7 +454,7 @@ class AppController {
         // The phone is connected: the "connect a phone" window has done its job.
         _dialog.compareAndSet(MainDialog.CONNECT, null)
         AppLog.i("Paired device ${request.deviceName} (${request.deviceId})")
-        _events.tryEmit("Телефон «${request.deviceName}» підключено")
+        _events.tryEmit(tr("Телефон «${request.deviceName}» підключено", "Телефон «${request.deviceName}» подключён"))
         return PairResult.Ok(token)
     }
 
@@ -498,6 +506,12 @@ class AppController {
 
     fun setCloseToTray(enabled: Boolean) {
         settings.update { it.copy(closeToTray = enabled) }
+    }
+
+    /** Switches the interface language; the windows redraw in it right away. */
+    fun setLanguage(lang: Lang) {
+        I18n.lang = lang
+        settings.update { it.copy(language = lang.code) }
     }
 
     fun setTheme(theme: UiTheme) {

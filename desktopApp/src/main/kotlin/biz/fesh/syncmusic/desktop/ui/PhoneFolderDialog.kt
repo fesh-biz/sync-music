@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop.ui
 
+import biz.fesh.syncmusic.shared.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +108,7 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    if (request.isNew) "Нова папка «${folder.name}»" else "Папка на телефоні для «${folder.name}»",
+                    if (request.isNew) tr("Нова папка «${folder.name}»", "Новая папка «${folder.name}»") else tr("Папка на телефоні для «${folder.name}»", "Папка на телефоне для «${folder.name}»"),
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Note(folder.path, maxLines = 1)
@@ -115,13 +116,13 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
                 // phone yet: narrowing the file types removes nothing there, no need to ask.
                 val setFileTypes = fileTypesSetter(folder, controller, askFirst = !request.isNew)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Які файли синхронізувати", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text(tr("Які файли синхронізувати", "Какие файлы синхронизировать"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     FileTypesToggle(folder.fileTypes, setFileTypes)
                 }
                 Note(Format.fileTypesHint(folder.fileTypes))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (folder.direction == Direction.TO_PHONE) "Куди класти файли з комп'ютера" else "Яку папку телефона надсилати на комп'ютер",
+                        if (folder.direction == Direction.TO_PHONE) tr("Куди класти файли з комп'ютера", "Куда класть файлы с компьютера") else tr("Яку папку телефона надсилати на комп'ютер", "Какую папку телефона отправлять на компьютер"),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
@@ -142,7 +143,7 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
                         PhoneFolders.currentPath(other.phoneTargets[device.id], PhoneFolders.progressOf(device, source, other.id))?.let { other.name to it }
                     }
                     key(device.id, folder.direction) {
-                        PickerBody(folder, device, storages[device.id], current, others, controller, cancelLabel = if (request.isNew) "Пізніше" else "Скасувати")
+                        PickerBody(folder, device, storages[device.id], current, others, controller, cancelLabel = if (request.isNew) tr("Пізніше", "Позже") else tr("Скасувати", "Отмена"))
                     }
                 }
             }
@@ -155,17 +156,17 @@ fun PhoneFolderDialog(request: PhonePickerRequest, controller: AppController) {
 private fun NoPhoneYet(folder: SyncFolder, controller: AppController) {
     Note(
         if (folder.direction == Direction.TO_PHONE) {
-            "Телефон ще не підключено. Папку на телефоні можна буде вибрати після підключення — тут або в застосунку на телефоні. " +
-                "Без вибору телефон покладе файли в «Sync Music/${folder.name}»."
+            tr("Телефон ще не підключено. Папку на телефоні можна буде вибрати після підключення — тут або в застосунку на телефоні. ", "Телефон ещё не подключён. Папку на телефоне можно будет выбрать после подключения — здесь или в приложении на телефоне. ") +
+                tr("Без вибору телефон покладе файли в «Sync Music/${folder.name}».", "Без выбора телефон положит файлы в «Sync Music/${folder.name}».")
         } else {
-            "Телефон ще не підключено. Яку папку телефона надсилати, можна буде вибрати після підключення — " +
-                "тут або в застосунку на телефоні."
+            tr("Телефон ще не підключено. Яку папку телефона надсилати, можна буде вибрати після підключення — ", "Телефон ещё не подключён. Какую папку телефона отправлять, можно будет выбрать после подключения — ") +
+                tr("тут або в застосунку на телефоні.", "здесь или в приложении на телефоне.")
         },
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.weight(1f))
-        Button(onClick = controller::closePhonePicker) { Text("Готово") }
+        Button(onClick = controller::closePhonePicker) { Text(tr("Готово", "Готово")) }
     }
 }
 
@@ -202,8 +203,8 @@ private fun PickerBody(
 
     if (storage == null) {
         Text(
-            "Телефон «${device.name}» ще не надіслав список своїх папок — це станеться під час його наступної синхронізації " +
-                "(потрібна нова версія застосунку на телефоні). Поки що папку можна вказати вручну кнопкою «Нова папка».",
+            tr("Телефон «${device.name}» ще не надіслав список своїх папок — це станеться під час його наступної синхронізації ", "Телефон «${device.name}» ещё не прислал список своих папок — это произойдёт во время его следующей синхронизации ") +
+                tr("(потрібна нова версія застосунку на телефоні). Поки що папку можна вказати вручну кнопкою «Нова папка».", "(нужна новая версия приложения на телефоне). Пока что папку можно указать вручную кнопкой «Новая папка»."),
             style = MaterialTheme.typography.bodyMedium,
             color = Palette.Amber,
         )
@@ -219,10 +220,10 @@ private fun PickerBody(
             }
         }
     }
-    if (volume.freeBytes >= 0) Note("Вільно ${Format.bytes(volume.freeBytes)} з ${Format.bytes(volume.totalBytes)}")
+    if (volume.freeBytes >= 0) Note(tr("Вільно ${Format.bytes(volume.freeBytes)} з ${Format.bytes(volume.totalBytes)}", "Свободно ${Format.bytes(volume.freeBytes)} из ${Format.bytes(volume.totalBytes)}"))
     if (volume.appPrivate) {
         Text(
-            "На цій версії Android на SD-карту можна писати лише в папку застосунку. Вона видаляється разом із застосунком.",
+            tr("На цій версії Android на SD-карту можна писати лише в папку застосунку. Вона видаляється разом із застосунком.", "В этой версии Android на SD-карту можно записывать только в папку приложения. Она удаляется вместе с приложением."),
             style = MaterialTheme.typography.bodySmall,
             color = Palette.Amber,
         )
@@ -236,12 +237,12 @@ private fun PickerBody(
     ) {
         LazyColumn(Modifier.padding(6.dp)) {
             if (rel.isNotEmpty()) {
-                item { FolderLine("‹  На рівень вище", folder = false) { rel = parentOf(rel) } }
+                item { FolderLine(tr("‹  На рівень вище", "‹  На уровень выше"), folder = false) { rel = parentOf(rel) } }
             }
             items(children, key = { it }) { dir ->
                 val path = volume.root.trimEnd('/') + "/" + dir
                 val mark = when {
-                    path == current -> "  · зараз тут"
+                    path == current -> tr("  · зараз тут", "  · сейчас здесь")
                     else -> others.firstOrNull { it.second == path }?.let { "  · «${it.first}»" } ?: ""
                 }
                 FolderLine(dir.substringAfterLast('/') + mark, folder = true) { rel = dir }
@@ -249,8 +250,8 @@ private fun PickerBody(
             if (children.isEmpty()) {
                 item {
                     Note(
-                        if (volume.truncated && volume.dirs.isNotEmpty()) "Вкладених папок не показано. Можна створити або ввести назву кнопкою «Нова папка»."
-                        else "Тут немає вкладених папок",
+                        if (volume.truncated && volume.dirs.isNotEmpty()) tr("Вкладених папок не показано. Можна створити або ввести назву кнопкою «Нова папка».", "Вложенные папки не показаны. Можно создать или ввести название кнопкой «Новая папка».")
+                        else tr("Тут немає вкладених папок", "Здесь нет вложенных папок"),
                     )
                 }
             }
@@ -264,7 +265,7 @@ private fun PickerBody(
                 value = newName,
                 onValueChange = { newName = it },
                 singleLine = true,
-                placeholder = { Text("Назва папки") },
+                placeholder = { Text(tr("Назва папки", "Название папки")) },
                 modifier = Modifier.weight(1f),
                 isError = newName.isNotEmpty() && !valid,
             )
@@ -275,45 +276,45 @@ private fun PickerBody(
                 rel = dir
                 newName = ""
                 creating = false
-            }) { Text("Додати") }
-            TextButton(onClick = { creating = false }) { Text("Скасувати") }
+            }) { Text(tr("Додати", "Добавить")) }
+            TextButton(onClick = { creating = false }) { Text(tr("Скасувати", "Отмена")) }
         }
-        if (!toPhone) Note("Папку телефона, якої там немає, надсилати нема чого — виберіть наявну папку.")
+        if (!toPhone) Note(tr("Папку телефона, якої там немає, надсилати нема чого — виберіть наявну папку.", "Папку телефона, которой там нет, отправлять нечего — выберите существующую папку."))
     }
 
     // What happens with the files already on the phone.
     if (toPhone && current != null && current != selected) {
         val oldVolume = volumes.filter { PhoneFolders.inside(current, it.root) }.maxByOrNull { it.root.length }
         if (oldVolume != null && oldVolume.id == volume.id) {
-            Note("Файли з «${describe(current)}» буде перенесено на телефоні без повторного завантаження (якщо нова папка порожня).")
+            Note(tr("Файли з «${describe(current)}» буде перенесено на телефоні без повторного завантаження (якщо нова папка порожня).", "Файлы из «${describe(current)}» будут перенесены на телефоне без повторной загрузки (если новая папка пуста)."))
         } else {
-            Note("Файли буде заново завантажено в нову папку на іншому носії.")
+            Note(tr("Файли буде заново завантажено в нову папку на іншому носії.", "Файлы будут заново загружены в новую папку на другом носителе."))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = deleteOld, onCheckedChange = { deleteOld = it })
-                Text("Видалити з телефона старі копії в «${describe(current)}»", style = MaterialTheme.typography.bodyMedium)
+                Text(tr("Видалити з телефона старі копії в «${describe(current)}»", "Удалить с телефона старые копии в «${describe(current)}»"), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
     val nested = others.firstOrNull { (_, path) -> path != selected && (PhoneFolders.inside(path, selected) || PhoneFolders.inside(selected, path)) }
     if (nested != null) {
         Text(
-            "Ця папка вкладена в папку «${nested.first}» на телефоні (або містить її). Краще вибрати окрему папку.",
+            tr("Ця папка вкладена в папку «${nested.first}» на телефоні (або містить її). Краще вибрати окрему папку.", "Эта папка вложена в папку «${nested.first}» на телефоне (или содержит её). Лучше выбрать отдельную папку."),
             style = MaterialTheme.typography.bodySmall,
             color = Palette.Amber,
         )
     }
     val sameAsOther = others.firstOrNull { it.second == selected }
-    Note("Телефон застосує вибір під час наступної синхронізації: протягом 15 хвилин або одразу, коли відкрити застосунок.")
+    Note(tr("Телефон застосує вибір під час наступної синхронізації: протягом 15 хвилин або одразу, коли відкрити застосунок.", "Телефон применит выбор при следующей синхронизации: в течение 15 минут или сразу, когда открыть приложение."))
 
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = controller::closePhonePicker) { Text(cancelLabel) }
         Spacer(Modifier.weight(1f))
         if (toPhone && !creating) {
-            OutlinedButton(onClick = { creating = true }) { Text("Нова папка") }
+            OutlinedButton(onClick = { creating = true }) { Text(tr("Нова папка", "Новая папка")) }
             Spacer(Modifier.width(8.dp))
         } else if (!creating) {
-            OutlinedButton(onClick = { creating = true }) { Text("Ввести назву") }
+            OutlinedButton(onClick = { creating = true }) { Text(tr("Ввести назву", "Ввести название")) }
             Spacer(Modifier.width(8.dp))
         }
         val canPick = !(toPhone && rel.isEmpty()) && sameAsOther == null
@@ -323,10 +324,10 @@ private fun PickerBody(
                 controller.setPhoneFolder(folder.id, device.id, selected, deleteOld)
                 controller.closePhonePicker()
             },
-        ) { Text("Вибрати цю папку") }
+        ) { Text(tr("Вибрати цю папку", "Выбрать эту папку")) }
     }
-    if (toPhone && rel.isEmpty()) Note("Виберіть або створіть папку — не корінь пам'яті.")
-    if (sameAsOther != null) Note("Цю папку вже використовує «${sameAsOther.first}».")
+    if (toPhone && rel.isEmpty()) Note(tr("Виберіть або створіть папку — не корінь пам'яті.", "Выберите или создайте папку — не корень памяти."))
+    if (sameAsOther != null) Note(tr("Цю папку вже використовує «${sameAsOther.first}».", "Эту папку уже использует «${sameAsOther.first}»."))
 }
 
 private fun parentOf(path: String) = path.substringBeforeLast('/', "")

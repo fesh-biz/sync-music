@@ -3,6 +3,8 @@ package biz.fesh.syncmusic.data
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import biz.fesh.syncmusic.shared.I18n
+import biz.fesh.syncmusic.shared.Lang
 import biz.fesh.syncmusic.shared.Protocol
 import biz.fesh.syncmusic.shared.SyncPhase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +69,21 @@ class Config private constructor(context: Context) {
         val manufacturer = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
         val model = Build.MODEL.orEmpty()
         if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model".trim()
+    }
+
+    private val _language = MutableStateFlow(prefs.getString(KEY_LANGUAGE, null))
+    /** Interface language chosen by the user ("uk" or "ru"); null = the system language. */
+    val language: StateFlow<String?> = _language.asStateFlow()
+
+    init {
+        // Config is created first in every entry point (activity, worker, receiver, service).
+        I18n.lang = Lang.of(_language.value) ?: Lang.system()
+    }
+
+    fun setLanguage(lang: Lang) {
+        I18n.lang = lang
+        _language.value = lang.code
+        prefs.edit().putString(KEY_LANGUAGE, lang.code).apply()
     }
 
     private val _server = MutableStateFlow(readJson(KEY_SERVER, PairedServer.serializer()))
@@ -181,6 +198,7 @@ class Config private constructor(context: Context) {
         private const val KEY_STORAGE = "storage_id"
         private const val KEY_FOLDERS = "folders"
         private const val KEY_MAPPINGS = "mappings"
+        private const val KEY_LANGUAGE = "language"
 
         @Volatile
         private var instance: Config? = null

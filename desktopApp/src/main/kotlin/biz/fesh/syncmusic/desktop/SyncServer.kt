@@ -1,5 +1,7 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.I18n
+import biz.fesh.syncmusic.shared.tr
 import biz.fesh.syncmusic.shared.Direction
 import biz.fesh.syncmusic.shared.ErrorResponse
 import biz.fesh.syncmusic.shared.FileTypes
@@ -83,16 +85,16 @@ class SyncServer(private val app: AppController) {
     /** The phone -> PC folder named in ?folder=, or null after responding with an error. */
     /** A folder the phone still knows but which was removed from the list on the PC. */
     private suspend fun ApplicationCall.respondFolderRemoved() =
-        respond(HttpStatusCode.Gone, ErrorResponse("Папку прибрано на комп'ютері"))
+        respond(HttpStatusCode.Gone, ErrorResponse(tr("Папку прибрано на комп'ютері", "Папка убрана на компьютере")))
 
     private suspend fun ApplicationCall.receivingFolder(): FolderRuntime? {
         val runtime = app.folderRuntime(request.queryParameters["folder"] ?: "")
         when {
             runtime == null -> respondFolderRemoved()
             runtime.folder.direction != Direction.TO_PC ->
-                respond(HttpStatusCode.Forbidden, ErrorResponse("Папка «${runtime.folder.name}» не приймає файли з телефона"))
+                respond(HttpStatusCode.Forbidden, ErrorResponse(tr("Папка «${runtime.folder.name}» не приймає файли з телефона", "Папка «${runtime.folder.name}» не принимает файлы с телефона")))
             !File(runtime.folder.path).isDirectory ->
-                respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка «${runtime.folder.name}» на комп'ютері недоступна"))
+                respond(HttpStatusCode.ServiceUnavailable, ErrorResponse(tr("Папка «${runtime.folder.name}» на комп'ютері недоступна", "Папка «${runtime.folder.name}» на компьютере недоступна")))
             else -> return runtime
         }
         return null
@@ -135,7 +137,7 @@ class SyncServer(private val app: AppController) {
                 val request = call.receive<PairRequest>()
                 when (val result = app.pair(request)) {
                     is PairResult.Ok -> call.respond(PairResponse(result.token, app.settings.value.serverId, app.computerName))
-                    PairResult.WrongPin -> call.respond(HttpStatusCode.Forbidden, ErrorResponse("Невірний код"))
+                    PairResult.WrongPin -> call.respond(HttpStatusCode.Forbidden, ErrorResponse(tr("Невірний код", "Неверный код")))
                 }
             }
 
@@ -159,12 +161,12 @@ class SyncServer(private val app: AppController) {
                 val runtime = app.folderRuntime(folderId)
                 if (runtime == null) {
                     if (folderId != null) call.respondFolderRemoved()
-                    else call.respond(HttpStatusCode.NotFound, ErrorResponse("Папку не знайдено"))
+                    else call.respond(HttpStatusCode.NotFound, ErrorResponse(tr("Папку не знайдено", "Папка не найдена")))
                     return@get
                 }
                 if (!File(runtime.folder.path).isDirectory) {
                     // Never hand out an empty list because of a missing folder: the phone would delete everything.
-                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Папка «${runtime.folder.name}» на комп'ютері недоступна"))
+                    call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse(tr("Папка «${runtime.folder.name}» на комп'ютері недоступна", "Папка «${runtime.folder.name}» на компьютере недоступна")))
                     return@get
                 }
                 call.respond(runtime.library.manifest(app.settings.value.serverId))
@@ -217,8 +219,8 @@ class SyncServer(private val app: AppController) {
                 val types = runtime.folder.fileTypes
                 if (!types.matches(path.substringAfterLast('/'))) {
                     // Phones before the file filter send everything; the PC keeps only what the folder takes.
-                    val what = if (types == FileTypes.MUSIC) "музику" else "фільми"
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Папка «${runtime.folder.name}» приймає лише $what"))
+                    val what = if (types == FileTypes.MUSIC) tr("музику", "музыку") else tr("фільми", "фильмы")
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(tr("Папка «${runtime.folder.name}» приймає лише $what", "Папка «${runtime.folder.name}» принимает только $what")))
                     return@put
                 }
                 if (offset > 0) AppLog.i("Upload resume $path from $offset")
@@ -237,7 +239,7 @@ class SyncServer(private val app: AppController) {
                     }
                     is UploadOutcome.Partial -> call.respond(UploadOffset(outcome.received))
                     is UploadOutcome.Conflict -> call.respond(HttpStatusCode.Conflict, UploadOffset(outcome.have))
-                    UploadOutcome.NoSpace -> call.respond(HttpStatusCode.InsufficientStorage, ErrorResponse("На комп'ютері недостатньо місця"))
+                    UploadOutcome.NoSpace -> call.respond(HttpStatusCode.InsufficientStorage, ErrorResponse(tr("На комп'ютері недостатньо місця", "На компьютере недостаточно места")))
                     is UploadOutcome.Rejected -> call.respond(HttpStatusCode.BadRequest, ErrorResponse(outcome.message))
                 }
             }
@@ -247,7 +249,7 @@ class SyncServer(private val app: AppController) {
             delete("/api/file") {
                 call.requireDevice() ?: return@delete
                 AppLog.i("Refused to delete ${call.request.queryParameters["path"]} on the PC (deleting on the PC is disabled)")
-                call.respond(HttpStatusCode.Forbidden, ErrorResponse("Видалення файлів на комп'ютері вимкнене"))
+                call.respond(HttpStatusCode.Forbidden, ErrorResponse(tr("Видалення файлів на комп'ютері вимкнене", "Удаление файлов на компьютере выключено")))
             }
 
             post("/api/progress") {
@@ -286,7 +288,7 @@ class SyncServer(private val app: AppController) {
                 val id = call.request.queryParameters["id"].orEmpty()
                 val file = app.files.pullFile(device.id, id)
                 if (file == null || !file.isFile) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Копіювання вже не виконується"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(tr("Копіювання вже не виконується", "Копирование уже не выполняется")))
                     return@get
                 }
                 val counter = app.files.counter(id)
@@ -303,7 +305,7 @@ class SyncServer(private val app: AppController) {
                             while (left > 0) {
                                 if (app.files.isCancelled(id)) throw java.io.IOException("cancelled")
                                 val n = withContext(Dispatchers.IO) { input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt()) }
-                                if (n < 0) throw java.io.IOException("Файл змінився під час копіювання")
+                                if (n < 0) throw java.io.IOException(tr("Файл змінився під час копіювання", "Файл изменился во время копирования"))
                                 channel.writeFully(buffer, 0, n)
                                 left -= n
                                 counter?.addAndGet(n.toLong())
@@ -354,14 +356,20 @@ class SyncServer(private val app: AppController) {
     private fun landingPage(): String {
         val hasApk = ApkResource.available
         val button = if (hasApk) {
-            """<a class="btn" href="/app.apk">Завантажити застосунок для Android</a>
-               <p class="hint">Після завантаження відкрийте файл і дозвольте встановлення з цього джерела.</p>"""
+            """<a class="btn" href="/app.apk">${tr("Завантажити застосунок для Android", "Скачать приложение для Android")}</a>
+               <p class="hint">${tr(
+                "Після завантаження відкрийте файл і дозвольте встановлення з цього джерела.",
+                "После загрузки откройте файл и разрешите установку из этого источника.",
+            )}</p>"""
         } else {
-            """<p class="hint">У цю збірку не вкладено APK. Завантажте його зі сторінки релізів на GitHub.</p>"""
+            """<p class="hint">${tr(
+                "У цю збірку не вкладено APK. Завантажте його зі сторінки релізів на GitHub.",
+                "В эту сборку не вложен APK. Скачайте его со страницы релизов на GitHub.",
+            )}</p>"""
         }
         return """
             <!doctype html>
-            <html lang="uk"><head><meta charset="utf-8">
+            <html lang="${I18n.lang.code}"><head><meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>Sync Music</title>
             <style>
@@ -373,7 +381,7 @@ class SyncServer(private val app: AppController) {
             </style></head>
             <body><div class="card">
               <h1>Sync Music</h1>
-              <p>Комп'ютер «${app.computerName}» готовий синхронізувати музику з телефоном.</p>
+              <p>${tr("Комп'ютер «${app.computerName}» готовий синхронізувати файли з телефоном.", "Компьютер «${app.computerName}» готов синхронизировать файлы с телефоном.")}</p>
               $button
             </div></body></html>
         """.trimIndent()

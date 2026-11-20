@@ -1,5 +1,8 @@
 package biz.fesh.syncmusic.desktop.ui
 
+import biz.fesh.syncmusic.shared.I18n
+import biz.fesh.syncmusic.shared.Lang
+import biz.fesh.syncmusic.shared.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -133,7 +136,7 @@ private fun Header(
         Column(Modifier.weight(1f)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Синхронізація файлів між комп'ютером і телефоном через Wi-Fi",
+                tr("Синхронізація файлів між комп'ютером і телефоном через Wi-Fi", "Синхронизация файлов между компьютером и телефоном через Wi-Fi"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -144,24 +147,24 @@ private fun Header(
         when (serverState) {
             is ServerState.Running -> {
                 if (addresses.isNotEmpty() || addressesLoading) {
-                    StatusPill("Працює · $computerName", Palette.Green, Palette.GreenSoft)
+                    StatusPill(tr("Працює · $computerName", "Работает · $computerName"), Palette.Green, Palette.GreenSoft)
                 } else {
-                    StatusPill("Працює · немає мережі", Palette.Amber, Palette.AmberSoft)
+                    StatusPill(tr("Працює · немає мережі", "Работает · нет сети"), Palette.Amber, Palette.AmberSoft)
                 }
             }
-            ServerState.Starting -> StatusPill("Запуск…", Palette.Grey, Palette.GreySoft)
+            ServerState.Starting -> StatusPill(tr("Запуск…", "Запуск…"), Palette.Grey, Palette.GreySoft)
             is ServerState.Failed -> StatusPill(serverState.message, Palette.Red, Palette.RedSoft)
         }
         Spacer(Modifier.width(10.dp))
         if (hasPhones) {
-            Button(onClick = { controller.files.openWindow() }) { Text("Файли телефона") }
+            Button(onClick = { controller.files.openWindow() }) { Text(tr("Файли телефона", "Файлы телефона")) }
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+            OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text(tr("Підключити телефон", "Подключить телефон")) }
         } else {
-            Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+            Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text(tr("Підключити телефон", "Подключить телефон")) }
         }
         Spacer(Modifier.width(8.dp))
-        OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }) { Text("Налаштування") }
+        OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }) { Text(tr("Налаштування", "Настройки")) }
     }
 }
 
@@ -190,7 +193,7 @@ private fun BrightHeader(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Sync Music", style = MaterialTheme.typography.headlineMedium, color = Color.White)
             Text(
-                "Комп'ютер і телефон у рівновазі: файли синхронізуються через Wi-Fi",
+                tr("Комп'ютер і телефон у рівновазі: файли синхронізуються через Wi-Fi", "Компьютер и телефон в равновесии: файлы синхронизируются через Wi-Fi"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.85f),
                 maxLines = 2,
@@ -198,9 +201,9 @@ private fun BrightHeader(
             )
             val (label, dot) = when (serverState) {
                 is ServerState.Running ->
-                    if (addresses.isNotEmpty() || addressesLoading) "Працює · $computerName" to Color(0xFF6CF0B0)
-                    else "Працює · немає мережі" to Color(0xFFFFC857)
-                ServerState.Starting -> "Запуск…" to Color.White
+                    if (addresses.isNotEmpty() || addressesLoading) tr("Працює · $computerName", "Работает · $computerName") to Color(0xFF6CF0B0)
+                    else tr("Працює · немає мережі", "Работает · нет сети") to Color(0xFFFFC857)
+                ServerState.Starting -> tr("Запуск…", "Запуск…") to Color.White
                 is ServerState.Failed -> serverState.message to Color(0xFFFF8A8A)
             }
             Row(
@@ -219,15 +222,15 @@ private fun BrightHeader(
             val ghost = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             val ghostBorder = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.6f))
             if (hasPhones) {
-                Button(onClick = { controller.files.openWindow() }, colors = onBanner) { Text("Файли телефона") }
+                Button(onClick = { controller.files.openWindow() }, colors = onBanner) { Text(tr("Файли телефона", "Файлы телефона")) }
             } else {
-                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = onBanner) { Text("Підключити телефон") }
+                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = onBanner) { Text(tr("Підключити телефон", "Подключить телефон")) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasPhones) {
-                    OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = ghost, border = ghostBorder) { Text("Підключити телефон") }
+                    OutlinedButton(onClick = { controller.openDialog(MainDialog.CONNECT) }, colors = ghost, border = ghostBorder) { Text(tr("Підключити телефон", "Подключить телефон")) }
                 }
-                OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }, colors = ghost, border = ghostBorder) { Text("Налаштування") }
+                OutlinedButton(onClick = { controller.openDialog(MainDialog.SETTINGS) }, colors = ghost, border = ghostBorder) { Text(tr("Налаштування", "Настройки")) }
             }
         }
     }
@@ -252,7 +255,7 @@ private fun Modal(title: String, width: Dp, onClose: () -> Unit, content: @Compo
                 HorizontalDivider(Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Row {
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = onClose) { Text("Закрити") }
+                    Button(onClick = onClose) { Text(tr("Закрити", "Закрыть")) }
                 }
             }
         }
@@ -314,11 +317,11 @@ private fun FoldersCard(
     SectionCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                CardTitle("Папки для синхронізації")
-                Muted("Для кожної папки виберіть, що синхронізувати: музику, фільми або всі файли. Структура папок зберігається. Папку на телефоні можна вибрати тут або в застосунку на телефоні.")
+                CardTitle(tr("Папки для синхронізації", "Папки для синхронизации"))
+                Muted(tr("Для кожної папки виберіть, що синхронізувати: музику, фільми або всі файли. Структура папок зберігається. Папку на телефоні можна вибрати тут або в застосунку на телефоні.", "Для каждой папки выберите, что синхронизировать: музыку, фильмы или все файлы. Структура папок сохраняется. Папку на телефоне можно выбрать здесь или в приложении на телефоне."))
             }
             Spacer(Modifier.width(12.dp))
-            OutlinedButton(onClick = controller::rescan) { Text("Оновити") }
+            OutlinedButton(onClick = controller::rescan) { Text(tr("Оновити", "Обновить")) }
             Spacer(Modifier.width(10.dp))
             Button(onClick = {
                 chooseFolder(settings.folders.lastOrNull()?.path)?.let { path ->
@@ -328,11 +331,11 @@ private fun FoldersCard(
                         controller.settings.value.folders.lastOrNull()?.let { controller.openPhonePicker(it.id, isNew = true) }
                     }
                 }
-            }) { Text("Додати папку") }
+            }) { Text(tr("Додати папку", "Добавить папку")) }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
         if (settings.folders.isEmpty()) {
-            Muted("Поки що немає жодної папки. Натисніть «Додати папку».")
+            Muted(tr("Поки що немає жодної папки. Натисніть «Додати папку».", "Пока нет ни одной папки. Нажмите «Добавить папку»."))
         }
         if (settings.folders.isNotEmpty()) Spacer(Modifier.height(4.dp))
         // Each folder is its own bordered block, so where one folder ends and the next begins is obvious.
@@ -346,15 +349,15 @@ private fun FoldersCard(
     removing?.let { folder ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Прибрати «${folder.name}» із синхронізації?") },
-            text = { Text("Файли на комп'ютері й на телефоні залишаться, просто перестануть синхронізуватися.") },
+            title = { Text(tr("Прибрати «${folder.name}» із синхронізації?", "Убрать «${folder.name}» из синхронизации?")) },
+            text = { Text(tr("Файли на комп'ютері й на телефоні залишаться, просто перестануть синхронізуватися.", "Файлы на компьютере и на телефоне останутся, просто перестанут синхронизироваться.")) },
             confirmButton = {
                 TextButton(onClick = {
                     removing = null
                     controller.removeFolder(folder.id)
-                }) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("Прибрати", "Убрать"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
 }
@@ -398,7 +401,7 @@ private fun FolderRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val summary = when {
                     stats.error != null -> stats.error!!
-                    stats.scanning && stats.scannedAt == 0L -> "Сканування…"
+                    stats.scanning && stats.scannedAt == 0L -> tr("Сканування…", "Сканирование…")
                     else -> "${Format.files(stats.files)} · ${Format.bytes(stats.bytes)}"
                 }
                 Text(
@@ -410,19 +413,19 @@ private fun FolderRow(
                 if (folder.direction == Direction.TO_PHONE) {
                     Checkbox(checked = folder.deleteMissing, onCheckedChange = { controller.setDeleteMissing(folder.id, it) })
                     Text(
-                        "Видаляти з телефона файли, видалені на ПК",
+                        tr("Видаляти з телефона файли, видалені на ПК", "Удалять с телефона файлы, удалённые на ПК"),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
                 } else {
                     Text(
-                        "З комп'ютера нічого не видаляється",
+                        tr("З комп'ютера нічого не видаляється", "С компьютера ничего не удаляется"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f).padding(start = 12.dp),
                     )
                 }
-                TextButton(onClick = onRemove) { Text("Прибрати", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onRemove) { Text(tr("Прибрати", "Убрать"), color = MaterialTheme.colorScheme.error) }
             }
             val source = SyncProgressSource { d -> live[d.id]?.progress ?: d.lastProgress }
             devices.sortedByDescending { it.lastSeen }.forEach { device ->
@@ -450,9 +453,9 @@ private fun PhoneFolderLine(
     val path = PhoneFolders.currentPath(target, progress)
     val toPhone = folder.direction == Direction.TO_PHONE
     val (text, color) = when {
-        path == null && toPhone -> "ще не вибрано — телефон покладе файли в «Sync Music/${folder.name}»" to MaterialTheme.colorScheme.onSurfaceVariant
-        path == null -> "не вибрано, яку папку телефона надсилати" to Palette.Amber
-        pending -> PhoneFolders.describe(storage, path.orEmpty()) + " · застосується під час наступної синхронізації" to Palette.Amber
+        path == null && toPhone -> tr("ще не вибрано — телефон покладе файли в «Sync Music/${folder.name}»", "ещё не выбрано — телефон положит файлы в «Sync Music/${folder.name}»") to MaterialTheme.colorScheme.onSurfaceVariant
+        path == null -> tr("не вибрано, яку папку телефона надсилати", "не выбрано, какую папку телефона отправлять") to Palette.Amber
+        pending -> PhoneFolders.describe(storage, path.orEmpty()) + tr(" · застосується під час наступної синхронізації", " · применится при следующей синхронизации") to Palette.Amber
         else -> (progress?.localPath ?: PhoneFolders.describe(storage, path.orEmpty())) to MaterialTheme.colorScheme.onSurface
     }
     Row(
@@ -461,13 +464,13 @@ private fun PhoneFolderLine(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (showName) "${device.name}:" else "На телефоні:",
+            if (showName) "${device.name}:" else tr("На телефоні:", "На телефоне:"),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        TextButton(onClick = onChange) { Text(if (path == null) "Вибрати папку" else "Змінити") }
+        TextButton(onClick = onChange) { Text(if (path == null) tr("Вибрати папку", "Выбрать папку") else tr("Змінити", "Изменить")) }
     }
 }
 
@@ -476,7 +479,7 @@ private fun PhoneFolderLine(
 private fun FileTypesRow(folder: SyncFolder, controller: AppController) {
     val change = fileTypesSetter(folder, controller)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Файли:", style = MaterialTheme.typography.bodyMedium)
+        Text(tr("Файли:", "Файлы:"), style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(10.dp))
         FileTypesToggle(folder.fileTypes, change)
         Spacer(Modifier.width(12.dp))
@@ -492,24 +495,24 @@ private fun FileTypesRow(folder: SyncFolder, controller: AppController) {
 internal fun fileTypesSetter(folder: SyncFolder, controller: AppController, askFirst: Boolean = true): (FileTypes) -> Unit {
     var confirm by remember(folder.id) { mutableStateOf<FileTypes?>(null) }
     confirm?.let { types ->
-        val what = if (types == FileTypes.MUSIC) "лише музику" else "лише фільми"
-        val other = if (types == FileTypes.MUSIC) "не є музикою" else "не є фільмами"
+        val what = if (types == FileTypes.MUSIC) tr("лише музику", "только музыку") else tr("лише фільми", "только фильмы")
+        val other = if (types == FileTypes.MUSIC) tr("не є музикою", "не являются музыкой") else tr("не є фільмами", "не являются фильмами")
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("Синхронізувати $what?") },
+            title = { Text(tr("Синхронізувати $what?", "Синхронизировать $what?")) },
             text = {
                 Text(
-                    "Під час наступної синхронізації телефон видалить із папки «${folder.name}» файли, які $other " +
-                        "(лише ті, що потрапили туди з комп'ютера). На комп'ютері нічого не зміниться.",
+                    tr("Під час наступної синхронізації телефон видалить із папки «${folder.name}» файли, які $other ", "При следующей синхронизации телефон удалит из папки «${folder.name}» файлы, которые $other ") +
+                        tr("(лише ті, що потрапили туди з комп'ютера). На комп'ютері нічого не зміниться.", "(только те, что попали туда с компьютера). На компьютере ничего не изменится."),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = null
                     controller.setFileTypes(folder.id, types)
-                }) { Text("Так, $what") }
+                }) { Text(tr("Так, $what", "Да, $what")) }
             },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
     return { types ->
@@ -524,7 +527,7 @@ internal fun fileTypesSetter(folder: SyncFolder, controller: AppController, askF
 @Composable
 internal fun FileTypesToggle(types: FileTypes, onChange: (FileTypes) -> Unit) {
     Segmented(
-        listOf(FileTypes.MUSIC to "Музика", FileTypes.MOVIES to "Фільми", FileTypes.ALL to "Усі"),
+        listOf(FileTypes.MUSIC to tr("Музика", "Музыка"), FileTypes.MOVIES to tr("Фільми", "Фильмы"), FileTypes.ALL to tr("Усі", "Все")),
         types,
         onChange,
     )
@@ -534,7 +537,7 @@ internal fun FileTypesToggle(types: FileTypes, onChange: (FileTypes) -> Unit) {
 internal fun DirectionToggle(direction: Direction, onChange: (Direction) -> Unit) {
     val look = LocalLook.current
     Segmented(
-        listOf(Direction.TO_PHONE to "ПК → телефон", Direction.TO_PC to "Телефон → ПК"),
+        listOf(Direction.TO_PHONE to tr("ПК → телефон", "ПК → телефон"), Direction.TO_PC to tr("Телефон → ПК", "Телефон → ПК")),
         direction,
         onChange,
         selectedBrush = { look.brush(it) },
@@ -588,7 +591,7 @@ private fun chooseFolder(initial: String?): String? {
     }
     val chooser = JFileChooser(initial ?: System.getProperty("user.home")).apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = "Виберіть папку для синхронізації"
+        dialogTitle = tr("Виберіть папку для синхронізації", "Выберите папку для синхронизации")
         isAcceptAllFileFilterUsed = false
     }
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
@@ -604,7 +607,7 @@ private fun ConnectDialog(
     port: Int,
     controller: AppController,
 ) {
-    Modal("Підключити телефон", 640.dp, controller::closeDialog) {
+    Modal(tr("Підключити телефон", "Подключить телефон"), 640.dp, controller::closeDialog) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             val address = addresses.firstOrNull()?.address
             if (address != null && ApkResource.available) {
@@ -613,33 +616,33 @@ private fun ConnectDialog(
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Step("1", "Встановіть застосунок")
+                Step("1", tr("Встановіть застосунок", "Установите приложение"))
                 if (address != null && ApkResource.available) {
-                    Muted("Наведіть камеру телефона на QR-код і завантажте застосунок. Телефон має бути в тій самій Wi-Fi мережі.")
+                    Muted(tr("Наведіть камеру телефона на QR-код і завантажте застосунок. Телефон має бути в тій самій Wi-Fi мережі.", "Наведите камеру телефона на QR-код и скачайте приложение. Телефон должен быть в той же Wi-Fi сети."))
                 } else {
-                    Muted("Завантажте SyncMusic.apk зі сторінки релізів і встановіть на телефон.")
+                    Muted(tr("Завантажте SyncMusic.apk зі сторінки релізів і встановіть на телефон.", "Скачайте SyncMusic.apk со страницы релизов и установите на телефон."))
                 }
                 Spacer(Modifier.height(6.dp))
-                Step("2", "Введіть код у застосунку")
-                Muted("Натисніть «Знайти комп'ютер», виберіть «${controller.computerName}» і введіть код:")
+                Step("2", tr("Введіть код у застосунку", "Введите код в приложении"))
+                Muted(tr("Натисніть «Знайти комп'ютер», виберіть «${controller.computerName}» і введіть код:", "Нажмите «Найти компьютер», выберите «${controller.computerName}» и введите код:"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(pin.chunked(3).joinToString(" "), style = PinStyle, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = controller::regeneratePin) { Text("Новий код") }
+                    TextButton(onClick = controller::regeneratePin) { Text(tr("Новий код", "Новый код")) }
                 }
             }
         }
         if (addresses.isNotEmpty()) {
             Muted(
-                "Адреса комп'ютера для ручного введення: " + addresses.joinToString(", ") { it.address },
+                tr("Адреса комп'ютера для ручного введення: ", "Адрес компьютера для ручного ввода: ") + addresses.joinToString(", ") { it.address },
             )
         } else if (addressesLoading) {
-            Muted("Визначаємо адресу комп'ютера…")
+            Muted(tr("Визначаємо адресу комп'ютера…", "Определяем адрес компьютера…"))
         } else {
-            Text("Комп'ютер не підключений до мережі", color = MaterialTheme.colorScheme.error)
+            Text(tr("Комп'ютер не підключений до мережі", "Компьютер не подключён к сети"), color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.height(2.dp))
-        Muted("Телефон не знаходить комп'ютер? Дозвольте Sync Music у брандмауері Windows (попросить права адміністратора):")
+        Muted(tr("Телефон не знаходить комп'ютер? Дозвольте Sync Music у брандмауері Windows (попросить права адміністратора):", "Телефон не находит компьютер? Разрешите Sync Music в брандмауэре Windows (попросит права администратора):"))
         FirewallButton(controller)
     }
 }
@@ -651,12 +654,12 @@ private fun FirewallButton(controller: AppController) {
         OutlinedButton(
             enabled = WindowsIntegration.isWindows,
             onClick = {
-                firewallStatus = "Підтвердіть запит Windows…"
+                firewallStatus = tr("Підтвердіть запит Windows…", "Подтвердите запрос Windows…")
                 controller.openFirewall { ok ->
-                    firewallStatus = if (ok) "Готово: доступ у брандмауері відкрито" else "Не вдалося — запит відхилено"
+                    firewallStatus = if (ok) tr("Готово: доступ у брандмауері відкрито", "Готово: доступ в брандмауэре открыт") else tr("Не вдалося — запит відхилено", "Не удалось — запрос отклонён")
                 }
             },
-        ) { Text("Дозволити в брандмауері") }
+        ) { Text(tr("Дозволити в брандмауері", "Разрешить в брандмауэре")) }
         firewallStatus?.let { Muted(it) }
     }
 }
@@ -685,16 +688,16 @@ private fun DevicesSection(settings: Settings, live: Map<String, LiveStatus>, co
             value = System.currentTimeMillis()
         }
     }
-    Text("Телефони", style = MaterialTheme.typography.titleLarge)
+    Text(tr("Телефони", "Телефоны"), style = MaterialTheme.typography.titleLarge)
     if (settings.devices.isEmpty()) {
         SectionCard(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Поки що жоден телефон не підключено", style = MaterialTheme.typography.titleSmall)
-                    Muted("Встановіть застосунок на телефон за QR-кодом і введіть код підключення.")
+                    Text(tr("Поки що жоден телефон не підключено", "Пока ни один телефон не подключён"), style = MaterialTheme.typography.titleSmall)
+                    Muted(tr("Встановіть застосунок на телефон за QR-кодом і введіть код підключення.", "Установите приложение на телефон по QR-коду и введите код подключения."))
                 }
                 Spacer(Modifier.width(12.dp))
-                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text("Підключити телефон") }
+                Button(onClick = { controller.openDialog(MainDialog.CONNECT) }) { Text(tr("Підключити телефон", "Подключить телефон")) }
             }
         }
     } else {
@@ -711,7 +714,7 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
     val lastSeen = maxOf(device.lastSeen, live?.receivedAt ?: 0L)
     val syncing = live != null && live.progress.phase.isActive && now - live.receivedAt < 30_000
     val online = now - lastSeen < 17 * 60_000L
-    val freeLabel = progress?.storage?.let { "Вільно ($it)" } ?: "Вільно на телефоні"
+    val freeLabel = progress?.storage?.let { tr("Вільно ($it)", "Свободно ($it)") } ?: tr("Вільно на телефоні", "Свободно на телефоне")
 
     SectionCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -720,16 +723,16 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
                 Muted(statusLine(progress, syncing, lastSeen, now))
             }
             when {
-                syncing -> StatusPill("Синхронізація", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
-                progress?.phase == SyncPhase.ERROR && online -> StatusPill("Помилка", Palette.Red, Palette.RedSoft)
-                online && progress != null && progress.remainingFiles == 0 -> StatusPill("Усе синхронізовано", Palette.Green, Palette.GreenSoft)
-                online -> StatusPill("На зв'язку", Palette.Green, Palette.GreenSoft)
-                else -> StatusPill("Не в мережі", Palette.Grey, Palette.GreySoft)
+                syncing -> StatusPill(tr("Синхронізація", "Синхронизация"), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                progress?.phase == SyncPhase.ERROR && online -> StatusPill(tr("Помилка", "Ошибка"), Palette.Red, Palette.RedSoft)
+                online && progress != null && progress.remainingFiles == 0 -> StatusPill(tr("Усе синхронізовано", "Всё синхронизировано"), Palette.Green, Palette.GreenSoft)
+                online -> StatusPill(tr("На зв'язку", "На связи"), Palette.Green, Palette.GreenSoft)
+                else -> StatusPill(tr("Не в мережі", "Не в сети"), Palette.Grey, Palette.GreySoft)
             }
         }
 
         if (progress == null || progress.totalFiles == 0 && progress.phase != SyncPhase.DONE) {
-            Muted("Телефон ще не синхронізувався. Синхронізація почнеться автоматично протягом кількох хвилин.")
+            Muted(tr("Телефон ще не синхронізувався. Синхронізація почнеться автоматично протягом кількох хвилин.", "Телефон ещё не синхронизировался. Синхронизация начнётся автоматически в течение нескольких минут."))
         } else {
             Spacer(Modifier.height(2.dp))
             if (LocalLook.current.bright) {
@@ -745,30 +748,30 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
             Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
                 Stat(
                     Modifier.weight(1f),
-                    "Синхронізовано",
-                    "${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)}",
-                    "${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)} · ${(progress.fraction * 100).toInt()}%",
+                    tr("Синхронізовано", "Синхронизировано"),
+                    tr("${Format.number(progress.syncedFiles.toLong())} з ${Format.filesGenitive(progress.totalFiles)}", "${Format.number(progress.syncedFiles.toLong())} из ${Format.filesGenitive(progress.totalFiles)}"),
+                    tr("${Format.bytes(progress.syncedBytes)} з ${Format.bytes(progress.totalBytes)} · ${(progress.fraction * 100).toInt()}%", "${Format.bytes(progress.syncedBytes)} из ${Format.bytes(progress.totalBytes)} · ${(progress.fraction * 100).toInt()}%"),
                 )
                 Stat(
                     Modifier.weight(1f),
-                    "Залишилось",
-                    if (progress.remainingFiles == 0) "Нічого" else Format.files(progress.remainingFiles),
-                    if (progress.remainingFiles == 0) "Телефон в актуальному стані" else Format.bytes(progress.remainingBytes) +
+                    tr("Залишилось", "Осталось"),
+                    if (progress.remainingFiles == 0) tr("Нічого", "Ничего") else Format.files(progress.remainingFiles),
+                    if (progress.remainingFiles == 0) tr("Телефон в актуальному стані", "Телефон в актуальном состоянии") else Format.bytes(progress.remainingBytes) +
                         (if (syncing) Format.eta(progress.remainingBytes, progress.bytesPerSecond)?.let { " · $it" } ?: "" else ""),
                 )
                 Stat(
                     Modifier.weight(1f),
-                    if (syncing) "Швидкість" else freeLabel,
+                    if (syncing) tr("Швидкість", "Скорость") else freeLabel,
                     if (syncing) Format.speed(progress.bytesPerSecond) else if (progress.freeSpaceBytes >= 0) Format.bytes(progress.freeSpaceBytes) else "—",
                     if (syncing && progress.freeSpaceBytes >= 0) "$freeLabel: ${Format.bytes(progress.freeSpaceBytes)}" else "",
                 )
             }
             if (syncing && progress.currentFile != null) {
-                Muted("Зараз: ${progress.currentFile}", maxLines = 1)
+                Muted(tr("Зараз: ${progress.currentFile}", "Сейчас: ${progress.currentFile}"), maxLines = 1)
             }
             val message = progress.message
             if (progress.paused) {
-                Text("Призупинено на телефоні. Продовжити можна кнопкою «Продовжити синхронізацію» в застосунку на телефоні.",
+                Text(tr("Призупинено на телефоні. Продовжити можна кнопкою «Продовжити синхронізацію» в застосунку на телефоні.", "Приостановлено на телефоне. Продолжить можно кнопкой «Продолжить синхронизацию» в приложении на телефоне."),
                     color = Palette.Amber, style = MaterialTheme.typography.bodyMedium)
             } else if (message != null && (progress.phase == SyncPhase.ERROR || progress.phase == SyncPhase.STOPPED)) {
                 Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
@@ -786,48 +789,48 @@ private fun DeviceCard(device: PairedDevice, live: LiveStatus?, now: Long, contr
 
         HorizontalDivider(Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Muted("Підключено ${Format.moment(device.pairedAt, now)}")
+            Muted(tr("Підключено ${Format.moment(device.pairedAt, now)}", "Подключён ${Format.moment(device.pairedAt, now)}"))
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { controller.files.openWindow(device.id) }) { Text("Файли телефона") }
-            TextButton(onClick = { confirmRemove = true }) { Text("Відключити телефон", color = MaterialTheme.colorScheme.error) }
+            TextButton(onClick = { controller.files.openWindow(device.id) }) { Text(tr("Файли телефона", "Файлы телефона")) }
+            TextButton(onClick = { confirmRemove = true }) { Text(tr("Відключити телефон", "Отключить телефон"), color = MaterialTheme.colorScheme.error) }
         }
     }
 
     if (confirmRemove) {
         AlertDialog(
             onDismissRequest = { confirmRemove = false },
-            title = { Text("Відключити «${device.name}»?") },
-            text = { Text("Телефон перестане синхронізуватися з цим комп'ютером. Музика на телефоні залишиться. Підключити знову можна за кодом.") },
+            title = { Text(tr("Відключити «${device.name}»?", "Отключить «${device.name}»?")) },
+            text = { Text(tr("Телефон перестане синхронізуватися з цим комп'ютером. Музика на телефоні залишиться. Підключити знову можна за кодом.", "Телефон перестанет синхронизироваться с этим компьютером. Музыка на телефоне останется. Подключить снова можно по коду.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRemove = false
                     controller.removeDevice(device.id)
-                }) { Text("Відключити", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("Відключити", "Отключить"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(tr("Скасувати", "Отмена")) } },
         )
     }
 }
 
 @Composable
 private fun FolderProgressRow(folder: FolderProgress) {
-    val arrow = if (folder.direction == Direction.TO_PHONE) "ПК → телефон" else "Телефон → ПК"
+    val arrow = if (folder.direction == Direction.TO_PHONE) tr("ПК → телефон", "ПК → телефон") else tr("Телефон → ПК", "Телефон → ПК")
     val message = folder.message
     val state = when {
-        !folder.enabled -> "вимкнено на телефоні"
-        folder.localPath == null -> "на телефоні не вибрано папку"
+        !folder.enabled -> tr("вимкнено на телефоні", "выключено на телефоне")
+        folder.localPath == null -> tr("на телефоні не вибрано папку", "на телефоне не выбрана папка")
         message != null -> message
-        folder.totalFiles == 0 -> "порожньо"
-        folder.remainingFiles == 0 -> "усе синхронізовано (${Format.files(folder.totalFiles)})"
-        else -> "${Format.number(folder.syncedFiles.toLong())} з ${Format.filesGenitive(folder.totalFiles)} · " +
-            "залишилось ${Format.files(folder.remainingFiles)} (${Format.bytes(folder.remainingBytes)})"
+        folder.totalFiles == 0 -> tr("порожньо", "пусто")
+        folder.remainingFiles == 0 -> tr("усе синхронізовано (${Format.files(folder.totalFiles)})", "всё синхронизировано (${Format.files(folder.totalFiles)})")
+        else -> tr("${Format.number(folder.syncedFiles.toLong())} з ${Format.filesGenitive(folder.totalFiles)} · ", "${Format.number(folder.syncedFiles.toLong())} из ${Format.filesGenitive(folder.totalFiles)} · ") +
+            tr("залишилось ${Format.files(folder.remainingFiles)} (${Format.bytes(folder.remainingBytes)})", "осталось ${Format.files(folder.remainingFiles)} (${Format.bytes(folder.remainingBytes)})")
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(170.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(arrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(110.dp))
         Column(Modifier.weight(1f)) {
             Text(state, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            folder.localPath?.let { Muted("на телефоні: $it", maxLines = 1) }
+            folder.localPath?.let { Muted(tr("на телефоні: $it", "на телефоне: $it"), maxLines = 1) }
         }
     }
 }
@@ -835,18 +838,18 @@ private fun FolderProgressRow(folder: FolderProgress) {
 private fun statusLine(progress: SyncProgress?, syncing: Boolean, lastSeen: Long, now: Long): String {
     if (syncing && progress != null) {
         return when (progress.phase) {
-            SyncPhase.CONNECTING -> "Підключається…"
-            SyncPhase.COMPARING -> "Порівнює файли…"
-            SyncPhase.DOWNLOADING -> "Завантажує файли з комп'ютера · за сеанс: ${Format.files(progress.downloadedThisRun)}"
-            SyncPhase.UPLOADING -> "Надсилає файли на комп'ютер · за сеанс: ${Format.files(progress.uploadedThisRun)}"
-            SyncPhase.DELETING -> "Видаляє файли, видалені в джерелі…"
-            else -> "Синхронізація…"
+            SyncPhase.CONNECTING -> tr("Підключається…", "Подключается…")
+            SyncPhase.COMPARING -> tr("Порівнює файли…", "Сравнивает файлы…")
+            SyncPhase.DOWNLOADING -> tr("Завантажує файли з комп'ютера · за сеанс: ${Format.files(progress.downloadedThisRun)}", "Загружает файлы с компьютера · за сеанс: ${Format.files(progress.downloadedThisRun)}")
+            SyncPhase.UPLOADING -> tr("Надсилає файли на комп'ютер · за сеанс: ${Format.files(progress.uploadedThisRun)}", "Отправляет файлы на компьютер · за сеанс: ${Format.files(progress.uploadedThisRun)}")
+            SyncPhase.DELETING -> tr("Видаляє файли, видалені в джерелі…", "Удаляет файлы, удалённые в источнике…")
+            else -> tr("Синхронізація…", "Синхронизация…")
         }
     }
-    val seen = "останній зв'язок ${Format.moment(lastSeen, now)}"
+    val seen = tr("останній зв'язок ${Format.moment(lastSeen, now)}", "последняя связь ${Format.moment(lastSeen, now)}")
     return when (progress?.phase) {
-        SyncPhase.ERROR -> "Помилка синхронізації · $seen"
-        SyncPhase.STOPPED -> if (progress.paused) "Синхронізацію призупинено на телефоні · $seen" else "Синхронізацію перервано, продовжиться автоматично · $seen"
+        SyncPhase.ERROR -> tr("Помилка синхронізації · $seen", "Ошибка синхронизации · $seen")
+        SyncPhase.STOPPED -> if (progress.paused) tr("Синхронізацію призупинено на телефоні · $seen", "Синхронизация приостановлена на телефоне · $seen") else tr("Синхронізацію перервано, продовжиться автоматично · $seen", "Синхронизация прервана, продолжится автоматически · $seen")
         else -> seen.replaceFirstChar { it.uppercase() }
     }
 }
@@ -864,32 +867,37 @@ private fun Stat(modifier: Modifier, label: String, value: String, sub: String) 
 
 @Composable
 private fun SettingsDialog(settings: Settings, controller: AppController) {
-    Modal("Налаштування", 560.dp, controller::closeDialog) {
+    Modal(tr("Налаштування", "Настройки"), 560.dp, controller::closeDialog) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Оформлення", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Segmented(listOf(UiTheme.BRIGHT to "Яскраве", UiTheme.CLASSIC to "Класичне"), settings.theme, controller::setTheme)
+            Text(tr("Оформлення", "Оформление"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Segmented(listOf(UiTheme.BRIGHT to tr("Яскраве", "Яркое"), UiTheme.CLASSIC to tr("Класичне", "Классическое")), settings.theme, controller::setTheme)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Shown in both languages, so it is easy to find whichever language is on.
+            Text("Мова · Язык", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Segmented(Lang.entries.map { it to it.title }, I18n.lang, controller::setLanguage)
         }
         Spacer(Modifier.height(2.dp))
         CheckRow(
             checked = settings.autostart,
             enabled = WindowsIntegration.canIntegrate,
-            text = "Запускати разом із Windows (у треї, без вікна)",
+            text = tr("Запускати разом із Windows (у треї, без вікна)", "Запускать вместе с Windows (в трее, без окна)"),
             onChange = controller::setAutostart,
         )
         CheckRow(
             checked = settings.closeToTray,
             enabled = true,
-            text = "Після закриття вікна працювати далі в треї",
+            text = tr("Після закриття вікна працювати далі в треї", "После закрытия окна работать дальше в трее"),
             onChange = controller::setCloseToTray,
         )
         Spacer(Modifier.height(4.dp))
         FirewallButton(controller)
-        Muted("Потрібно, якщо телефон не знаходить комп'ютер. Windows попросить права адміністратора.")
+        Muted(tr("Потрібно, якщо телефон не знаходить комп'ютер. Windows попросить права адміністратора.", "Нужно, если телефон не находит компьютер. Windows попросит права администратора."))
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Muted("Sync Music ${BuildInfo.version}")
             Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = { openLog() }) { Text("Журнал") }
+            OutlinedButton(onClick = { openLog() }) { Text(tr("Журнал", "Журнал")) }
         }
     }
 }

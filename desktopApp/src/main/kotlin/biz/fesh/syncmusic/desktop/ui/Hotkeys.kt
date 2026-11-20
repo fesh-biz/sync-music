@@ -7,48 +7,58 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.type
 import biz.fesh.syncmusic.desktop.Settings
+import biz.fesh.syncmusic.shared.tr
 import java.awt.event.KeyEvent as Awt
 
 /**
  * Commands of the file window and their keys. The defaults are Total Commander's;
  * the user can change them (Settings.fmHotkeys keeps only what differs from the defaults).
  */
-enum class FmAction(val title: String, val defaults: List<String>, val group: String) {
-    SWITCH_PANEL("Перейти в іншу панель", listOf("Tab"), NAV),
-    OPEN("Відкрити папку або файл", listOf("Enter"), NAV),
-    UP("Папка вище (..)", listOf("Backspace", "Ctrl+PageUp"), NAV),
-    ROOT("Корінь диска", listOf("Ctrl+\\"), NAV),
-    LEFT_DRIVES("Диски комп'ютера (ліва панель)", listOf("Alt+F1"), NAV),
-    RIGHT_DRIVES("Пам'ять і SD-карта телефона (права панель)", listOf("Alt+F2"), NAV),
-    REFRESH("Оновити панель", listOf("Ctrl+R"), NAV),
+enum class FmAction(private val uk: String, private val ru: String, val defaults: List<String>, private val groupKey: FmGroup) {
+    SWITCH_PANEL("Перейти в іншу панель", "Перейти в другую панель", listOf("Tab"), FmGroup.NAV),
+    OPEN("Відкрити папку або файл", "Открыть папку или файл", listOf("Enter"), FmGroup.NAV),
+    UP("Папка вище (..)", "Папка выше (..)", listOf("Backspace", "Ctrl+PageUp"), FmGroup.NAV),
+    ROOT("Корінь диска", "Корень диска", listOf("Ctrl+\\"), FmGroup.NAV),
+    LEFT_DRIVES("Диски комп'ютера (ліва панель)", "Диски компьютера (левая панель)", listOf("Alt+F1"), FmGroup.NAV),
+    RIGHT_DRIVES("Пам'ять і SD-карта телефона (права панель)", "Память и SD-карта телефона (правая панель)", listOf("Alt+F2"), FmGroup.NAV),
+    REFRESH("Оновити панель", "Обновить панель", listOf("Ctrl+R"), FmGroup.NAV),
 
-    SELECT("Позначити й перейти до наступного", listOf("Insert", "Space"), SEL),
-    SELECT_ALL("Позначити все", listOf("Ctrl+A", "Ctrl+Num+"), SEL),
-    DESELECT_ALL("Зняти всі позначки", listOf("Ctrl+Num-"), SEL),
-    SELECT_GROUP("Позначити за маскою", listOf("Num+"), SEL),
-    DESELECT_GROUP("Зняти позначки за маскою", listOf("Num-"), SEL),
-    INVERT("Інвертувати позначки", listOf("Num*"), SEL),
+    SELECT("Позначити й перейти до наступного", "Выделить и перейти к следующему", listOf("Insert", "Space"), FmGroup.SEL),
+    SELECT_ALL("Позначити все", "Выделить всё", listOf("Ctrl+A", "Ctrl+Num+"), FmGroup.SEL),
+    DESELECT_ALL("Зняти всі позначки", "Снять всё выделение", listOf("Ctrl+Num-"), FmGroup.SEL),
+    SELECT_GROUP("Позначити за маскою", "Выделить по маске", listOf("Num+"), FmGroup.SEL),
+    DESELECT_GROUP("Зняти позначки за маскою", "Снять выделение по маске", listOf("Num-"), FmGroup.SEL),
+    INVERT("Інвертувати позначки", "Инвертировать выделение", listOf("Num*"), FmGroup.SEL),
 
-    VIEW("Перегляд", listOf("F3"), FILES),
-    EDIT("Правка", listOf("F4"), FILES),
-    COPY("Копіювати в іншу панель", listOf("F5"), FILES),
-    MOVE("Перемістити в іншу панель", listOf("F6"), FILES),
-    RENAME("Перейменувати", listOf("Shift+F6"), FILES),
-    MKDIR("Нова папка", listOf("F7"), FILES),
-    DELETE("Видалити", listOf("F8", "Delete"), FILES),
+    VIEW("Перегляд", "Просмотр", listOf("F3"), FmGroup.FILES),
+    EDIT("Правка", "Правка", listOf("F4"), FmGroup.FILES),
+    COPY("Копіювати в іншу панель", "Копировать в другую панель", listOf("F5"), FmGroup.FILES),
+    MOVE("Перемістити в іншу панель", "Переместить в другую панель", listOf("F6"), FmGroup.FILES),
+    RENAME("Перейменувати", "Переименовать", listOf("Shift+F6"), FmGroup.FILES),
+    MKDIR("Нова папка", "Новая папка", listOf("F7"), FmGroup.FILES),
+    DELETE("Видалити", "Удалить", listOf("F8", "Delete"), FmGroup.FILES),
 
-    SORT_NAME("Сортувати за ім'ям", listOf("Ctrl+F3"), SORT),
-    SORT_EXT("Сортувати за типом", listOf("Ctrl+F4"), SORT),
-    SORT_TIME("Сортувати за датою", listOf("Ctrl+F5"), SORT),
-    SORT_SIZE("Сортувати за розміром", listOf("Ctrl+F6"), SORT),
+    SORT_NAME("Сортувати за ім'ям", "Сортировать по имени", listOf("Ctrl+F3"), FmGroup.SORT),
+    SORT_EXT("Сортувати за типом", "Сортировать по типу", listOf("Ctrl+F4"), FmGroup.SORT),
+    SORT_TIME("Сортувати за датою", "Сортировать по дате", listOf("Ctrl+F5"), FmGroup.SORT),
+    SORT_SIZE("Сортувати за розміром", "Сортировать по размеру", listOf("Ctrl+F6"), FmGroup.SORT),
 
-    HOTKEYS("Налаштувати клавіші", listOf("F9"), SORT),
+    HOTKEYS("Налаштувати клавіші", "Настроить клавиши", listOf("F9"), FmGroup.SORT);
+
+    val title: String get() = tr(uk, ru)
+
+    /** FmGroup heading in the key settings window. */
+    val group: String get() = groupKey.title
 }
 
-private const val NAV = "Переходи"
-private const val SEL = "Позначення"
-private const val FILES = "Файли"
-private const val SORT = "Інше"
+enum class FmGroup(private val uk: String, private val ru: String) {
+    NAV("Переходи", "Переходы"),
+    SEL("Позначення", "Выделение"),
+    FILES("Файли", "Файлы"),
+    SORT("Інше", "Другое");
+
+    val title: String get() = tr(uk, ru)
+}
 
 /** One key press, independent of Compose so that tests can send it too. */
 data class KeyPress(

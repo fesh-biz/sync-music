@@ -1,5 +1,6 @@
 package biz.fesh.syncmusic.desktop
 
+import biz.fesh.syncmusic.shared.tr
 import biz.fesh.syncmusic.shared.FileTypes
 import biz.fesh.syncmusic.shared.Manifest
 import biz.fesh.syncmusic.shared.ManifestEntry
@@ -118,7 +119,7 @@ class Library {
     private fun scan(rootPath: String, types: FileTypes): Pair<Snapshot, String?> {
         val rootDir = File(rootPath)
         if (!rootDir.isDirectory) {
-            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis(), types) to "Папку не знайдено"
+            return Snapshot(rootPath, emptyList(), emptyMap(), System.currentTimeMillis(), types) to tr("Папку не знайдено", "Папка не найдена")
         }
         val rootNio = rootDir.toPath()
         val entries = ArrayList<ManifestEntry>()
@@ -147,7 +148,7 @@ class Library {
             })
         } catch (t: Throwable) {
             AppLog.e("Scan failed for $rootPath", t)
-            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis(), types) to "Помилка читання папки: ${t.message}"
+            return Snapshot(rootPath, entries, byPath, System.currentTimeMillis(), types) to tr("Помилка читання папки: ${t.message}", "Ошибка чтения папки: ${t.message}")
         }
         entries.sortBy { it.path.lowercase() }
         return Snapshot(rootPath, entries, byPath, System.currentTimeMillis(), types) to null
