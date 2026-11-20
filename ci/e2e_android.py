@@ -896,6 +896,24 @@ def scenario_files_commander(src, dest):
     pc_command("fm-key|Ctrl+R")
     time.sleep(2)
 
+    # Keys go through the real keyboard path (AWT key events → Compose → the window's key handler).
+    # Down/Up move the cursor; Space marks the row and moves down, and must not touch the sorting.
+    pc_command("fm-key|Home")
+    pc_command("fm-key|Down")
+    ui = fm_status().get("ui") or {}
+    check("Down moves the cursor from \"..\" to the first folder", ui.get("cursor") == "Альбом", ui)
+    pc_command("fm-key|Down")
+    pc_command("fm-key|Up")
+    ui = fm_status().get("ui") or {}
+    check("Up moves the cursor back", ui.get("cursor") == "Альбом", ui)
+    pc_command("fm-key|Space")
+    after = fm_status().get("ui") or {}
+    check("Space marks the row, moves down and keeps the sorting",
+          after.get("selected") == 1 and after.get("cursor") != "Альбом"
+          and after.get("sort") == ui.get("sort") and after.get("desc") == ui.get("desc"), f"{ui} -> {after}")
+    pc_command("fm-key|Ctrl+Num-")
+    check("Ctrl+Num- removes all marks", (fm_status().get("ui") or {}).get("selected") == 0, fm_status().get("ui"))
+
     # Down from ".." onto the first folder (Альбом), Insert marks it, F5 + Enter copies it to the phone panel's folder.
     pc_command("fm-key|Home")
     pc_command("fm-key|Down")
@@ -911,6 +929,8 @@ def scenario_files_commander(src, dest):
 
     # Tab to the phone panel, F7 + Enter: a new folder on the phone.
     pc_command("fm-key|Tab")
+    ui = fm_status().get("ui") or {}
+    check("Tab switches to the phone panel", ui.get("active") == "PHONE", ui)
     pc_command("fm-key|F7")
     time.sleep(1)
     pc_command("fm-key|Enter")

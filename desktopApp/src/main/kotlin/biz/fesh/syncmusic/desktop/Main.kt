@@ -2,6 +2,7 @@ package biz.fesh.syncmusic.desktop
 
 import biz.fesh.syncmusic.shared.Lang
 import biz.fesh.syncmusic.shared.tr
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,6 +25,7 @@ import androidx.compose.ui.window.rememberWindowState
 import biz.fesh.syncmusic.desktop.ui.App
 import biz.fesh.syncmusic.desktop.ui.FilesKeys
 import biz.fesh.syncmusic.desktop.ui.FilesScreen
+import biz.fesh.syncmusic.desktop.ui.Hotkeys
 import biz.fesh.syncmusic.shared.Protocol
 import java.awt.Frame
 import java.io.File
@@ -44,6 +46,9 @@ import kotlin.system.exitProcess
 
 /** Keys of the file window (Total Commander style); also pressed by test commands (fm-key). */
 private val filesKeys = FilesKeys()
+
+/** The open file window (test commands send real key events to it). */
+@Volatile private var filesWindow: java.awt.Window? = null
 
 fun main(args: Array<String>) {
     val startMinimized = args.any { it == "--minimized" }
@@ -169,6 +174,10 @@ fun main(args: Array<String>) {
                     window.toFront()
                     AppLog.i("File window shown")
                 }
+                DisposableEffect(Unit) {
+                    filesWindow = window
+                    onDispose { filesWindow = null }
+                }
                 key(language) { FilesScreen(controller, filesKeys) }
             }
         }
@@ -224,7 +233,7 @@ private fun mirrorStatus(controller: AppController) {
                     // fm-list|<phone folder> (result in status.json), fm-to-phone|<PC file or folder>|<phone folder>,
                     // fm-to-pc|<phone file or folder>|<PC folder>|<dir: true/false>[|move], fm-theme|BRIGHT or CLASSIC,
                     // fm-to-phone|…|…|move, fm-delete-phone|<phone path>, fm-rename-phone|<phone path>|<new name>,
-                    // fm-key|<combination, e.g. F5, Shift+Down, Num+> (as if pressed in the file window)
+                    // fm-key|<combination, e.g. F5, Shift+Down, Num+> (real AWT key events, the keyboard's own path)
                     "fm-open" -> controller.files.openWindow()
                     "fm-close" -> controller.files.closeWindow()
                     "fm-pc" -> controller.files.pcPath.value = parts.getOrNull(1)?.ifEmpty { null }
@@ -258,7 +267,7 @@ private fun mirrorStatus(controller: AppController) {
                     }
                     "fm-key" -> {
                         val combo = text.substringAfter('|')
-                        javax.swing.SwingUtilities.invokeLater { AppLog.i("fm-key $combo: " + filesKeys.press(combo)) }
+                        javax.swing.SwingUtilities.invokeLater { AppLog.i("fm-key $combo: " + pressInFilesWindow(combo)) }
                     }
                     "fm-theme" -> controller.setTheme(UiTheme.valueOf(parts[1]))
                     // set-lang|uk or ru
@@ -329,8 +338,59 @@ private fun mirrorStatus(controller: AppController) {
     }
 }
 
+/**
+ * Sends [combo] to the file window as real AWT key events (pressed + released), so they go the same way as
+ * the keyboard: Compose → Window.onPreviewKeyEvent → FilesKeys. Returns a note for the log.
+ */
+private fun pressInFilesWindow(combo: String): String {
+    val press = Hotkeys.parse(combo) ?: return "unknown key"
+    val window = filesWindow ?: return "no file window"
+    val target = keyTarget(window) ?: return "no component listens to keys"
+    var mods = 0
+    if (press.ctrl) mods = mods or java.awt.event.InputEvent.CTRL_DOWN_MASK
+    if (press.alt) mods = mods or java.awt.event.InputEvent.ALT_DOWN_MASK
+    if (press.shift) mods = mods or java.awt.event.InputEvent.SHIFT_DOWN_MASK
+    val numpad = press.code in java.awt.event.KeyEvent.VK_NUMPAD0..java.awt.event.KeyEvent.VK_DIVIDE
+    val location = if (numpad) java.awt.event.KeyEvent.KEY_LOCATION_NUMPAD else java.awt.event.KeyEvent.KEY_LOCATION_STANDARD
+    val char = if (press.ctrl || press.alt) java.awt.event.KeyEvent.CHAR_UNDEFINED else when (press.code) {
+        java.awt.event.KeyEvent.VK_SPACE -> ' '
+        java.awt.event.KeyEvent.VK_ENTER -> '\n'
+        java.awt.event.KeyEvent.VK_TAB -> '\t'
+        java.awt.event.KeyEvent.VK_BACK_SPACE -> '\b'
+        java.awt.event.KeyEvent.VK_ESCAPE -> 27.toChar()
+        else -> java.awt.event.KeyEvent.CHAR_UNDEFINED
+    }
+    val now = System.currentTimeMillis()
+    val down = java.awt.event.KeyEvent(target, java.awt.event.KeyEvent.KEY_PRESSED, now, mods, press.code, char, location)
+    target.dispatchEvent(down)
+    val up = java.awt.event.KeyEvent(target, java.awt.event.KeyEvent.KEY_RELEASED, now + 1, mods, press.code, char, location)
+    target.dispatchEvent(up)
+    return "sent to ${target.javaClass.simpleName}, consumed=${down.isConsumed}"
+}
+
+/** The component inside [window] that Compose listens to for keys. */
+private fun keyTarget(window: java.awt.Window): java.awt.Component? {
+    window.mostRecentFocusOwner?.takeIf { it.keyListeners.isNotEmpty() }?.let { return it }
+    fun find(c: java.awt.Component): java.awt.Component? {
+        if (c.keyListeners.isNotEmpty()) return c
+        if (c is java.awt.Container) for (child in c.components) find(child)?.let { return it }
+        return null
+    }
+    return find(window)
+}
+
 private fun fmStatus(controller: AppController) = buildJsonObject {
     val files = controller.files
+    filesKeys.state?.invoke()?.let { ui ->
+        put("ui", buildJsonObject {
+            put("active", ui.active)
+            ui.path?.let { put("path", it) }
+            ui.cursor?.let { put("cursor", it) }
+            put("selected", ui.selected)
+            put("sort", ui.sort)
+            put("desc", ui.desc)
+        })
+    }
     val jobs = files.jobs.value
     put("open", files.open.value)
     put("online", controller.settings.value.devices.firstOrNull()?.let { files.isOnline(it.id) } ?: false)

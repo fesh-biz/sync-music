@@ -687,7 +687,14 @@ private fun FilesContent(controller: AppController, settings: Settings, keys: Fi
 
     DisposableEffect(keys) {
         keys.handler = ui::onKey
-        onDispose { keys.handler = null }
+        keys.state = {
+            val p = ui.current
+            FmUiState(ui.active.name, p.listingFor, p.cursorRow?.name, p.selected.size, p.sort.name, p.desc)
+        }
+        onDispose {
+            keys.handler = null
+            keys.state = null
+        }
     }
 
     Box(Modifier.fillMaxSize()) {

@@ -1,11 +1,15 @@
 package biz.fesh.syncmusic.desktop.ui
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import biz.fesh.syncmusic.desktop.Settings
 import biz.fesh.syncmusic.shared.tr
 import java.awt.event.KeyEvent as Awt
@@ -91,16 +95,23 @@ object Hotkeys {
         "Shift+Up", "Shift+Down", "Shift+PageUp", "Shift+PageDown", "Shift+Home", "Shift+End",
     )
 
+    /**
+     * Compose key event → key press. Uses only Compose's own API: since Compose Multiplatform 1.6
+     * `nativeKeyEvent` is no longer a java.awt.event.KeyEvent, and casting it silently dropped every key.
+     * On the desktop Key.nativeKeyCode is the AWT VK_ code and utf16CodePoint is the AWT key char.
+     */
     fun fromCompose(event: KeyEvent): KeyPress? {
         if (event.type != KeyEventType.KeyDown) return null
-        val awt = event.nativeKeyEvent as? Awt ?: return null
-        val ch = awt.keyChar
+        val code = event.key.nativeKeyCode
+        if (code == Awt.VK_UNDEFINED) return null
+        val point = event.utf16CodePoint
+        val ch = if (point in 1 until Awt.CHAR_UNDEFINED.code) point.toChar() else '\u0000'
         return KeyPress(
-            code = awt.keyCode,
+            code = code,
             ctrl = event.isCtrlPressed,
             alt = event.isAltPressed,
             shift = event.isShiftPressed,
-            char = if (ch != Awt.CHAR_UNDEFINED && !ch.isISOControl()) ch else '\u0000',
+            char = if (ch != '\u0000' && !ch.isISOControl()) ch else '\u0000',
         )
     }
 
@@ -211,14 +222,32 @@ object Hotkeys {
 class FilesKeys {
     @Volatile var handler: ((KeyPress) -> Boolean)? = null
 
-    fun onKeyEvent(event: KeyEvent): Boolean {
-        val press = Hotkeys.fromCompose(event) ?: return false
-        return handler?.invoke(press) ?: false
+    /** What the file window shows right now (for status.json in tests). */
+    @Volatile var state: (() -> FmUiState)? = null
+
+    /**
+     * Keys whose KeyDown the file window handled: their KeyUp is swallowed too, otherwise a focused
+     * button or column header would still react to it (Space on the "Name" header changed the sorting).
+     */
+    private val swallowed = HashSet<Key>()
+
+    fun onKeyEvent(event: KeyEvent): Boolean = when (event.type) {
+        KeyEventType.KeyDown -> {
+            val press = Hotkeys.fromCompose(event)
+            val handled = press != null && (handler?.invoke(press) ?: false)
+            if (handled) swallowed += event.key else swallowed -= event.key
+            handled
+        }
+        KeyEventType.KeyUp -> swallowed.remove(event.key)
+        else -> false
     }
 
-    /** Test hook: presses "F5", "Shift+Down", … */
+    /** Test hook without the keyboard path: presses "F5", "Shift+Down", … straight into the handler. */
     fun press(combo: String): Boolean {
         val press = Hotkeys.parse(combo) ?: return false
         return handler?.invoke(press) ?: false
     }
 }
+
+/** Active panel, cursor, marks and sorting of the file window. */
+data class FmUiState(val active: String, val path: String?, val cursor: String?, val selected: Int, val sort: String, val desc: Boolean)
