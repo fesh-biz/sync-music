@@ -1,0 +1,4 @@
+First launch: window composed after 2610 ms (wall clock)
+Reopen from the tray via a second launch: window shown after 584 ms
+Relaunch 1: window composed after 2238 ms (wall clock)
+Relaunch 2: window composed after 2167 ms (wall clock)

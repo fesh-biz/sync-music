@@ -1,0 +1,169 @@
+2026-11-20 17:31:34.335 INFO Starting Sync Music 1.0.33
+2026-11-20 17:31:34.343 INFO Folders: [/tmp/e2e/music]
+2026-11-20 17:31:34.436 INFO Discovery listening on UDP 45455
+2026-11-20 17:31:34.456 INFO Watching /tmp/e2e/music (11 folders)
+2026-11-20 17:31:34.461 INFO Network addresses [LocalAddress(address=10.1.1.58, interfaceName=eth0)] in 41 ms
+2026-11-20 17:31:34.466 INFO Scanned 26 files in 63 ms (was null)
+2026-11-20 17:31:34.469 INFO Core started 801 ms after launch
+2026-11-20 17:31:35.210 INFO HTTP server on port 45456
+2026-11-20 17:31:36.763 INFO Window composed 3165 ms after launch
+2026-11-20 17:31:41.093 INFO Test command: show-connect
+2026-11-20 17:31:45.618 INFO Test command: show-settings
+2026-11-20 17:31:50.136 INFO Test command: hide-dialog
+2026-11-20 17:31:51.645 INFO Test command: show-phone-picker|music|new
+2026-11-20 17:31:55.658 INFO Test command: hide-phone-picker
+2026-11-20 17:33:00.691 INFO Paired device Google sdk_gphone64_x86_64 (766a91b7-4273-4b21-8595-818866d5a3cb)
+2026-11-20 17:33:14.330 INFO Folder music changed, rescanning
+2026-11-20 17:33:14.333 INFO Scanned 24 files in 2 ms (was 26)
+2026-11-20 17:33:16.699 INFO Folder music changed, rescanning
+2026-11-20 17:33:16.701 INFO Scanned 20 files in 1 ms (was 24)
+2026-11-20 17:33:37.681 INFO Folder music changed, rescanning
+2026-11-20 17:33:37.683 INFO Scanned 22 files in 1 ms (was 20)
+2026-11-20 17:33:50.499 INFO Folder music changed, rescanning
+2026-11-20 17:33:50.501 INFO Scanned 23 files in 2 ms (was 22)
+2026-11-20 17:33:52.101 INFO Test command: rescan
+2026-11-20 17:34:05.315 WARN Request /api/file?folder=music&path=Big%2Fhuge.flac failed :: io.ktor.utils.io.ClosedByteChannelException: Connection reset by peer
+2026-11-20 17:34:31.562 INFO Resume Big/huge.flac from bytes=32219868-
+2026-11-20 17:34:57.865 INFO Folder music changed, rescanning
+2026-11-20 17:34:57.867 INFO Scanned 22 files in 1 ms (was 23)
+2026-11-20 17:35:11.152 INFO Folder music changed, rescanning
+2026-11-20 17:35:11.153 INFO Scanned 23 files in 1 ms (was 22)
+2026-11-20 17:35:13.076 INFO Test command: rescan
+2026-11-20 17:35:26.210 WARN Request /api/file?folder=music&path=Big%2Fpause.flac failed :: kotlinx.coroutines.JobCancellationException: StandaloneCoroutine was cancelled; job=StandaloneCoroutine{Cancelling}@30a3c5ea
+2026-11-20 17:35:46.487 INFO Resume Big/pause.flac from bytes=35687388-
+2026-11-20 17:36:06.439 INFO Folder music changed, rescanning
+2026-11-20 17:36:06.440 INFO Scanned 22 files in 1 ms (was 23)
+2026-11-20 17:36:17.003 INFO Test command: add-folder|/tmp/e2e/pc-camera|TO_PC
+2026-11-20 17:36:17.005 INFO Added folder pc-camera (/tmp/e2e/pc-camera, TO_PC)
+2026-11-20 17:36:17.005 INFO Scanned 0 files in 0 ms (was null)
+2026-11-20 17:36:17.005 INFO add-folder: ok
+2026-11-20 17:36:17.005 INFO Watching /tmp/e2e/pc-camera (1 folders)
+2026-11-20 17:36:42.347 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:36:42.348 INFO Scanned 5 files in 1 ms (was 0)
+2026-11-20 17:36:50.651 INFO Test command: set-delete|pc-camera|true
+2026-11-20 17:37:09.205 INFO Kept the existing 2026/Квітень/IMG_0100.jpg, saved the phone's version as IMG_0100 (з телефона).jpg
+2026-11-20 17:37:10.705 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:37:10.706 INFO Scanned 6 files in 1 ms (was 5)
+2026-11-20 17:37:34.158 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:37:58.126 INFO Upload resume big.mp4 from 25869740
+2026-11-20 17:38:26.545 INFO Test command: add-folder|/tmp/e2e/docs|TO_PHONE
+2026-11-20 17:38:26.546 INFO Scanned 2 files in 0 ms (was null)
+2026-11-20 17:38:26.546 INFO Added folder docs (/tmp/e2e/docs, TO_PHONE)
+2026-11-20 17:38:26.547 INFO add-folder: ok
+2026-11-20 17:38:26.547 INFO Watching /tmp/e2e/docs (2 folders)
+2026-11-20 17:38:26.767 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:38:26.768 INFO Scanned 7 files in 0 ms (was 6)
+2026-11-20 17:38:37.093 INFO Test command: fm-open
+2026-11-20 17:38:37.197 INFO File window shown
+2026-11-20 17:38:39.599 INFO Test command: fm-list|
+2026-11-20 17:38:44.107 INFO Test command: fm-list|/storage/emulated/0
+2026-11-20 17:38:48.614 INFO Test command: fm-list|/data/data
+2026-11-20 17:38:53.122 INFO Test command: fm-pc|/tmp/e2e
+2026-11-20 17:38:54.625 INFO Test command: fm-phone|/storage/emulated/0
+2026-11-20 17:39:00.138 INFO Test command: fm-to-phone|/tmp/e2e/fm-src|/storage/emulated/0/Download/FM
+2026-11-20 17:39:00.144 INFO File window: copying 3 files з комп'ютера
+2026-11-20 17:39:02.142 INFO Test command: fm-to-phone|/tmp/e2e/fm-src|/storage/emulated/0/Download/FM
+2026-11-20 17:39:02.143 INFO File window: copying 3 files з комп'ютера
+2026-11-20 17:39:03.645 INFO Test command: fm-to-pc|/storage/emulated/0/Download/FMphone|/tmp/e2e/fm-dest|true
+2026-11-20 17:39:03.658 INFO File window: copying 2 files з телефона
+2026-11-20 17:39:05.155 INFO Test command: fm-to-pc|/storage/emulated/0/Download/FMphone/Фото 1.jpg|/tmp/e2e/fm-dest/FMphone|false
+2026-11-20 17:39:05.155 INFO File window: copying 1 files з телефона
+2026-11-20 17:39:07.158 INFO Test command: fm-pc|/tmp/e2e/fm-src
+2026-11-20 17:39:08.661 INFO Test command: fm-phone|/storage/emulated/0/Download/FMkeys
+2026-11-20 17:39:14.169 INFO Test command: fm-key|F7
+2026-11-20 17:39:14.179 INFO fm-key F7: sent to , consumed=true
+2026-11-20 17:39:17.174 INFO Test command: fm-key|Enter
+2026-11-20 17:39:17.175 INFO fm-key Enter: sent to , consumed=true
+2026-11-20 17:39:20.679 INFO Test command: fm-key|Ctrl+R
+2026-11-20 17:39:20.680 INFO fm-key Ctrl+R: sent to , consumed=true
+2026-11-20 17:39:24.185 INFO Test command: fm-key|Home
+2026-11-20 17:39:24.186 INFO fm-key Home: sent to , consumed=true
+2026-11-20 17:39:25.687 INFO Test command: fm-key|Down
+2026-11-20 17:39:25.688 INFO fm-key Down: sent to , consumed=true
+2026-11-20 17:39:27.190 INFO Test command: fm-key|Down
+2026-11-20 17:39:27.191 INFO fm-key Down: sent to , consumed=true
+2026-11-20 17:39:28.692 INFO Test command: fm-key|Up
+2026-11-20 17:39:28.693 INFO fm-key Up: sent to , consumed=true
+2026-11-20 17:39:30.194 INFO Test command: fm-key|Space
+2026-11-20 17:39:30.196 INFO fm-key Space: sent to , consumed=true
+2026-11-20 17:39:31.196 INFO Test command: fm-key|Ctrl+Num-
+2026-11-20 17:39:31.197 INFO fm-key Ctrl+Num-: sent to , consumed=true
+2026-11-20 17:39:32.699 INFO Test command: fm-key|Home
+2026-11-20 17:39:32.700 INFO fm-key Home: sent to , consumed=true
+2026-11-20 17:39:34.201 INFO Test command: fm-key|Down
+2026-11-20 17:39:34.202 INFO fm-key Down: sent to , consumed=true
+2026-11-20 17:39:35.703 INFO Test command: fm-key|Insert
+2026-11-20 17:39:35.704 INFO fm-key Insert: sent to , consumed=true
+2026-11-20 17:39:38.719 INFO Test command: fm-key|F5
+2026-11-20 17:39:38.731 INFO fm-key F5: sent to , consumed=true
+2026-11-20 17:39:41.724 INFO Test command: fm-key|Enter
+2026-11-20 17:39:41.725 INFO File window: copying 1 files з комп'ютера
+2026-11-20 17:39:41.725 INFO fm-key Enter: sent to , consumed=true
+2026-11-20 17:39:43.227 INFO Test command: fm-key|Tab
+2026-11-20 17:39:43.228 INFO fm-key Tab: sent to , consumed=true
+2026-11-20 17:39:44.729 INFO Test command: fm-key|F7
+2026-11-20 17:39:44.730 INFO fm-key F7: sent to , consumed=true
+2026-11-20 17:39:47.233 INFO Test command: fm-key|Enter
+2026-11-20 17:39:47.235 INFO fm-key Enter: sent to , consumed=true
+2026-11-20 17:39:52.741 INFO Test command: fm-key|F9
+2026-11-20 17:39:52.742 INFO fm-key F9: sent to , consumed=true
+2026-11-20 17:39:56.747 INFO Test command: fm-key|Esc
+2026-11-20 17:39:56.748 INFO fm-key Esc: sent to , consumed=true
+2026-11-20 17:39:58.249 INFO Test command: fm-rename-phone|/storage/emulated/0/Download/FMphone/Фото 1.jpg|Фото нове.jpg
+2026-11-20 17:39:59.752 INFO Test command: fm-to-pc|/storage/emulated/0/Download/FMphone|/tmp/e2e/fm-moved|true|move
+2026-11-20 17:39:59.759 INFO File window: copying 2 files з телефона (переміщення)
+2026-11-20 17:40:05.266 INFO Test command: fm-to-phone|/tmp/e2e/fm-move-src|/storage/emulated/0/Download/FMkeys|move
+2026-11-20 17:40:05.266 INFO File window: copying 2 files з комп'ютера (переміщення)
+2026-11-20 17:40:09.773 INFO Test command: fm-delete-phone|/storage/emulated/0/Download/FMkeys/Альбом/02 трек.flac
+2026-11-20 17:40:09.783 INFO File window: deleted 1 items on the phone
+2026-11-20 17:40:11.275 INFO Test command: fm-delete-phone|/storage/emulated/0/Download/FMkeys
+2026-11-20 17:40:11.290 INFO File window: deleted 1 items on the phone
+2026-11-20 17:40:15.782 INFO Test command: fm-delete-phone|/storage/emulated/0
+2026-11-20 17:40:15.787 INFO File window: deleted 1 items on the phone
+2026-11-20 17:40:20.289 INFO Test command: fm-close
+2026-11-20 17:40:22.793 INFO Test command: show-phone-picker|docs
+2026-11-20 17:40:27.299 INFO Test command: hide-phone-picker
+2026-11-20 17:40:28.801 INFO Test command: show-phone-picker|docs|new
+2026-11-20 17:40:33.809 INFO Test command: hide-phone-picker
+2026-11-20 17:40:35.311 INFO Test command: set-phone-folder|docs|/storage/emulated/0/Documents/Docs from PC
+2026-11-20 17:40:35.315 INFO Phone folder for 02ca2d6a-7933-4ee7-b805-37abba8a4aa5 on 766a91b7-4273-4b21-8595-818866d5a3cb: /storage/emulated/0/Documents/Docs from PC (deleteOld=false)
+2026-11-20 17:40:45.844 INFO Test command: add-folder|/tmp/e2e/media|TO_PHONE
+2026-11-20 17:40:45.845 INFO Added folder media (/tmp/e2e/media, TO_PHONE)
+2026-11-20 17:40:45.845 INFO add-folder: ok
+2026-11-20 17:40:45.845 INFO Scanned 8 files in 0 ms (was null)
+2026-11-20 17:40:45.847 INFO Watching /tmp/e2e/media (3 folders)
+2026-11-20 17:40:47.347 INFO Test command: set-file-types|media|MUSIC
+2026-11-20 17:40:47.349 INFO File types of 336683cc-63a9-42fd-a5db-3c796b174dae: MUSIC
+2026-11-20 17:40:47.349 INFO Scanned 3 files in 0 ms (was 8)
+2026-11-20 17:40:58.375 INFO Test command: set-file-types|media|MOVIES
+2026-11-20 17:40:58.376 INFO File types of 336683cc-63a9-42fd-a5db-3c796b174dae: MOVIES
+2026-11-20 17:41:08.403 INFO Test command: set-file-types|media|ALL
+2026-11-20 17:41:08.403 INFO File types of 336683cc-63a9-42fd-a5db-3c796b174dae: ALL
+2026-11-20 17:41:08.404 INFO Scanned 8 files in 1 ms (was 3)
+2026-11-20 17:41:18.930 INFO Test command: remove-folder|media
+2026-11-20 17:41:20.433 INFO Test command: set-file-types|pc-camera|MOVIES
+2026-11-20 17:41:20.434 INFO File types of 4ed270f9-5b0c-4a58-b0b8-4b1f10a7c680: MOVIES
+2026-11-20 17:41:20.435 INFO Scanned 2 files in 1 ms (was 7)
+2026-11-20 17:41:30.984 INFO Test command: set-file-types|pc-camera|ALL
+2026-11-20 17:41:30.985 INFO File types of 4ed270f9-5b0c-4a58-b0b8-4b1f10a7c680: ALL
+2026-11-20 17:41:30.985 INFO Scanned 8 files in 0 ms (was 2)
+2026-11-20 17:41:31.178 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:41:41.766 INFO Folder pc-camera changed, rescanning
+2026-11-20 17:41:41.767 INFO Scanned 9 files in 0 ms (was 8)
+2026-11-20 17:43:42.452 INFO Test command: rescan
+2026-11-20 17:43:42.661 INFO Scanned 28022 files in 209 ms (was 22)
+2026-11-20 17:43:43.980 INFO Folder music changed, rescanning
+2026-11-20 17:44:14.922 INFO Test command: rescan
+2026-11-20 17:44:14.923 INFO Scanned 22 files in 1 ms (was 28022)
+2026-11-20 17:44:16.147 INFO Folder music changed, rescanning
+2026-11-20 17:47:02.080 INFO Test command: add-folder|/tmp/e2e/removeme|TO_PHONE
+2026-11-20 17:47:02.081 INFO Added folder removeme (/tmp/e2e/removeme, TO_PHONE)
+2026-11-20 17:47:02.081 INFO add-folder: ok
+2026-11-20 17:47:02.082 INFO Watching /tmp/e2e/removeme (1 folders)
+2026-11-20 17:47:02.083 INFO Scanned 300 files in 2 ms (was null)
+2026-11-20 17:47:13.117 INFO Test command: remove-folder|removeme
+2026-11-20 17:47:23.160 INFO Test command: set-lang|ru
+2026-11-20 17:47:24.663 INFO Test command: show-settings
+2026-11-20 17:47:28.668 INFO Test command: hide-dialog
+2026-11-20 17:48:07.265 INFO Test command: set-lang|uk
+2026-11-20 17:48:09.768 INFO Test command: remove-devices
